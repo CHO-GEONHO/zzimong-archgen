@@ -37,7 +37,7 @@ export function resolveIconUrl(icon: string | null | undefined): string | null {
 // 라인 타입별 색상
 const LINE_STYLES: Record<string, any> = {
   data:    { stroke: '#a78bfa', strokeWidth: 2 },
-  general: { stroke: '#4a5568', strokeWidth: 1.5 },
+  general: { stroke: '#94a3b8', strokeWidth: 1.5 },
   alert:   { stroke: '#f87171', strokeWidth: 2 },
   vpc:     { stroke: '#374151', strokeWidth: 1, strokeDasharray: '8,4' },
   lb:      { stroke: '#6b7280', strokeWidth: 1.5, strokeDasharray: '5,5' },
@@ -196,13 +196,13 @@ export function irToFlow(ir: ArchIR): { nodes: Node[], edges: Edge[] } {
       label: edge.label || '',
       style: lineStyle,
       animated: edge.line_type === 'data',
-      markerEnd: edge.arrow !== 'backward' ? {
+      markerEnd: (edge.arrow || 'forward') !== 'backward' ? {
         type: MarkerType.ArrowClosed,
         color: lineStyle.stroke,
         width: 16,
         height: 16,
       } : undefined,
-      markerStart: edge.arrow === 'both' ? {
+      markerStart: (edge.arrow === 'both' || edge.arrow === 'backward') ? {
         type: MarkerType.ArrowClosed,
         color: lineStyle.stroke,
         width: 16,
