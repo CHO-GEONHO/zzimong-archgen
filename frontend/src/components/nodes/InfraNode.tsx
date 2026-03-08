@@ -23,7 +23,11 @@ export default function InfraNode({ data }: { data: InfraNodeData }) {
       <div className="infra-node-content">
         {/* 아이콘 영역 */}
         {hasIcon ? (
-          <div className="node-icon-wrap" title={data.iconKey || ''}>
+          <div
+            className="node-icon-wrap node-icon-clickable"
+            title={`${data.iconKey || ''}\n클릭하여 아이콘 변경`}
+            onClick={() => data.onSearchIcon?.(data.nodeId || '', data.nodeType || '', data.label)}
+          >
             <img
               src={data.iconUrl!}
               className="node-icon"
@@ -32,7 +36,6 @@ export default function InfraNode({ data }: { data: InfraNodeData }) {
               onError={e => {
                 const el = e.target as HTMLImageElement
                 el.style.display = 'none'
-                // fallback: 플레이스홀더 표시
                 const ph = el.parentElement?.querySelector('.node-icon-placeholder') as HTMLElement
                 if (ph) ph.style.display = 'flex'
               }}
@@ -40,6 +43,7 @@ export default function InfraNode({ data }: { data: InfraNodeData }) {
             <div className="node-icon-placeholder" style={{ display: 'none' }}>
               {data.nodeType?.[0]?.toUpperCase() || '?'}
             </div>
+            <div className="node-icon-edit-hint">✎</div>
           </div>
         ) : (
           <div
