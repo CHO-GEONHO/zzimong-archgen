@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import type { Connection } from 'reactflow'
 import ReactFlow, {
   Background,
@@ -14,22 +14,26 @@ import { irToFlow, flowToIR } from '../utils/irToFlow'
 import InfraNode from './nodes/InfraNode'
 import GroupNode from './nodes/GroupNode'
 
-const nodeTypes = {
-  infraNode: InfraNode,
-  groupNode: GroupNode,
-}
-
 interface Props {
   ir: ArchIR | null
   onIrChange: (ir: ArchIR) => void
   diagramId: string | null
+  onSearchIcon?: (nodeId: string, nodeType: string, label: string) => void
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8081'
 
-export default function DiagramEditor({ ir, onIrChange, diagramId }: Props) {
+export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
+
+  // onSearchIcon을 InfraNode에 주입
+  const nodeTypes = useMemo(() => ({
+    infraNode: (props: any) => (
+      <InfraNode {...props} data={{ ...props.data, onSearchIcon }} />
+    ),
+    groupNode: GroupNode,
+  }), [onSearchIcon])
 
   useEffect(() => {
     if (!ir) return
@@ -77,7 +81,7 @@ export default function DiagramEditor({ ir, onIrChange, diagramId }: Props) {
     if (!el) return
     try {
       const { toPng } = await import('html-to-image')
-      const dataUrl = await toPng(el, { quality: 0.95 })
+      const dataUrl = await toPng(el, { quality: 0.95, backgroundColor: '#0a0a0f' })
       const a = document.createElement('a')
       a.download = `${ir?.meta?.title || 'diagram'}.png`
       a.href = dataUrl
@@ -92,8 +96,18 @@ export default function DiagramEditor({ ir, onIrChange, diagramId }: Props) {
     return (
       <div className="canvas-empty">
         <div className="empty-message">
+          <div className="empty-arch-icon">🏗️</div>
           <h2>ArchGen</h2>
-          <p>왼쪽 패널에서 인프라를 설명하거나<br />CLI 출력을 붙여넣어 다이어그램을 생성하세요.</p>
+          <p>
+            왼쪽 패널에서 인프라 구조를 설명하면<br />
+            AI가 아이콘과 연결선이 있는<br />
+            아키텍처 다이어그램을 생성합니다
+          </p>
+          <div className="empty-tips">
+            <span className="empty-tip">✦ AWS / Azure / GCP 아이콘 자동 매핑</span>
+            <span className="empty-tip">✦ 데이터 흐름 순서 자동 분석</span>
+            <span className="empty-tip">✦ 누락 아이콘 클릭으로 웹 검색</span>
+          </div>
         </div>
       </div>
     )
@@ -110,11 +124,17 @@ export default function DiagramEditor({ ir, onIrChange, diagramId }: Props) {
         onNodeDragStop={onNodeDragStop}
         nodeTypes={nodeTypes}
         fitView
+        fitViewOptions={{ padding: 0.15 }}
         deleteKeyCode="Delete"
+        minZoom={0.2}
+        maxZoom={2}
       >
-        <Background />
+        <Background color="#1a1a2e" gap={20} size={1} />
         <Controls />
-        <MiniMap />
+        <MiniMap
+          nodeColor="#4a5568"
+          maskColor="rgba(10,10,15,0.7)"
+        />
       </ReactFlow>
       <div className="canvas-toolbar">
         <button onClick={handleSave} className="btn-primary">저장</button>

@@ -1,5 +1,5 @@
 /**
- * JSON IR ↔ React Flow 변환 유틸리티
+ * JSON IR ↔ React Flow 변환 유틸리티 (v2 — Iconify CDN 지원)
  */
 import { MarkerType } from "reactflow"
 import type { Node, Edge } from "reactflow"
@@ -7,21 +7,40 @@ import type { ArchIR } from "../App"
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8081'
 
+/**
+ * 아이콘 경로 → URL 변환
+ * - "logos:aws-ec2" 형식 → Iconify CDN URL
+ * - "aws/ec2.svg" 형식 → 로컬 서버 URL
+ */
+export function resolveIconUrl(icon: string | null | undefined): string | null {
+  if (!icon) return null
+
+  // Iconify 형식: "prefix:icon-name" (슬래시 없고 콜론 있음)
+  if (icon.includes(':') && !icon.includes('/')) {
+    const [prefix, name] = icon.split(':')
+    // 컬러 버전: color=currentColor로 SVG 렌더링
+    return `https://api.iconify.design/${prefix}/${name}.svg?color=%23ffffff&height=32`
+  }
+
+  // 로컬 파일 형식: "aws/ec2.svg"
+  return `${API_BASE}/icons/${icon}`
+}
+
 // 라인 타입별 색상
 const LINE_STYLES: Record<string, any> = {
-  data:    { stroke: '#F4A000', strokeWidth: 2 },
-  general: { stroke: '#888888', strokeWidth: 1.5 },
-  alert:   { stroke: '#FF0000', strokeWidth: 2 },
-  vpc:     { stroke: '#333333', strokeWidth: 1, strokeDasharray: '8,4' },
-  lb:      { stroke: '#888888', strokeWidth: 1.5, strokeDasharray: '5,5' },
-  blue:    { stroke: '#0078D4', strokeWidth: 2 },
+  data:    { stroke: '#a78bfa', strokeWidth: 2 },
+  general: { stroke: '#4a5568', strokeWidth: 1.5 },
+  alert:   { stroke: '#f87171', strokeWidth: 2 },
+  vpc:     { stroke: '#374151', strokeWidth: 1, strokeDasharray: '8,4' },
+  lb:      { stroke: '#6b7280', strokeWidth: 1.5, strokeDasharray: '5,5' },
+  blue:    { stroke: '#60a5fa', strokeWidth: 2 },
 }
 
 export function irToFlow(ir: ArchIR): { nodes: Node[], edges: Edge[] } {
   const nodes: Node[] = []
   const edges: Edge[] = []
 
-  // 그룹 노드 (React Flow에서 parentNode 방식)
+  // 그룹 노드
   for (const group of ir.groups) {
     nodes.push({
       id: group.id,
@@ -30,9 +49,9 @@ export function irToFlow(ir: ArchIR): { nodes: Node[], edges: Edge[] } {
       style: {
         width: group.size?.width || 800,
         height: group.size?.height || 600,
-        background: `${group.color || '#888888'}${Math.round((group.bg_opacity || 0.08) * 255).toString(16).padStart(2, '0')}`,
-        border: `2px solid ${group.color || '#888888'}`,
-        borderRadius: 12,
+        background: `${group.color || '#888888'}${Math.round((group.bg_opacity || 0.06) * 255).toString(16).padStart(2, '0')}`,
+        border: `1.5px solid ${group.color || '#888888'}66`,
+        borderRadius: 16,
       },
       data: {
         label: group.label,
@@ -54,11 +73,13 @@ export function irToFlow(ir: ArchIR): { nodes: Node[], edges: Edge[] } {
       data: {
         label: node.label,
         sublabel: node.sublabel,
-        icon: node.icon ? `${API_BASE}/icons/${node.icon}` : null,
+        iconUrl: resolveIconUrl(node.icon),
+        iconKey: node.icon,   // 원본 아이콘 키 (IconSearch용)
         ip: node.ip,
         port: node.port,
         tags: node.tags || [],
         nodeType: node.type,
+        nodeId: node.id,
       },
     })
   }
@@ -73,8 +94,18 @@ export function irToFlow(ir: ArchIR): { nodes: Node[], edges: Edge[] } {
       label: edge.label || '',
       style: lineStyle,
       animated: edge.line_type === 'data',
-      markerEnd: edge.arrow !== 'backward' ? { type: MarkerType.ArrowClosed } : undefined,
-      markerStart: edge.arrow === 'both' ? { type: MarkerType.ArrowClosed } : undefined,
+      markerEnd: edge.arrow !== 'backward' ? {
+        type: MarkerType.ArrowClosed,
+        color: lineStyle.stroke,
+        width: 16,
+        height: 16,
+      } : undefined,
+      markerStart: edge.arrow === 'both' ? {
+        type: MarkerType.ArrowClosed,
+        color: lineStyle.stroke,
+        width: 16,
+        height: 16,
+      } : undefined,
       data: { line_type: edge.line_type },
     })
   }
@@ -87,7 +118,6 @@ export function flowToIR(
   flowNodes: Node[],
   _flowEdges: Edge[],
 ): ArchIR {
-  // 위치 업데이트 (드래그 결과 반영)
   const updatedNodes = ir.nodes.map(irNode => {
     const flowNode = flowNodes.find(n => n.id === irNode.id)
     if (flowNode) {
