@@ -92,6 +92,35 @@ export function irToFlow(ir: ArchIR): { nodes: Node[], edges: Edge[] } {
     })
   }
 
+  // 그룹 크기 자동 보정: 자식 노드 위치 기반으로 꼭 맞게 조정
+  const NODE_W = 200   // 노드 예상 렌더 너비
+  const NODE_H = 90    // 노드 예상 렌더 높이
+  const PAD_X = 80     // 그룹 내부 좌우 패딩
+  const PAD_Y = 60     // 그룹 내부 상하 패딩
+  const HEADER_H = 40  // 그룹 라벨 헤더 높이
+
+  for (const group of ir.groups) {
+    const children = ir.nodes.filter(n => n.parent === group.id)
+    if (children.length === 0) continue
+
+    const positions = children.map(c => c.position || { x: 0, y: 0 })
+    const minX = Math.min(...positions.map(p => p.x))
+    const maxX = Math.max(...positions.map(p => p.x))
+    const minY = Math.min(...positions.map(p => p.y))
+    const maxY = Math.max(...positions.map(p => p.y))
+
+    const fitW = maxX - minX + NODE_W + PAD_X * 2
+    const fitH = maxY - minY + NODE_H + PAD_Y * 2 + HEADER_H
+    const calcW = Math.max(fitW, 300)
+    const calcH = Math.max(fitH, 200)
+
+    const groupNode = nodes.find(n => n.id === group.id)
+    if (groupNode?.style) {
+      groupNode.style.width = calcW
+      groupNode.style.height = calcH
+    }
+  }
+
   // 엣지
   for (const edge of ir.edges) {
     const lineStyle = LINE_STYLES[edge.line_type || 'general'] || LINE_STYLES.general
