@@ -81,11 +81,27 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon 
     if (!el) return
     try {
       const { toPng } = await import('html-to-image')
-      const dataUrl = await toPng(el, { quality: 0.95, backgroundColor: '#0a0a0f' })
+      const dataUrl = await toPng(el, {
+        quality: 0.95,
+        backgroundColor: '#0a0a0f',
+        pixelRatio: 2,
+        // 크로스오리진 이미지(Iconify) 로드 실패 시 건너뜀 (Safari 대응)
+        filter: (node) => {
+          if (node instanceof HTMLElement && node.tagName === 'IMG') {
+            const img = node as HTMLImageElement
+            if (!img.complete || img.naturalWidth === 0) return false
+          }
+          return true
+        },
+      })
+      const filename = `${ir?.meta?.title || 'diagram'}.png`
       const a = document.createElement('a')
-      a.download = `${ir?.meta?.title || 'diagram'}.png`
+      a.download = filename
       a.href = dataUrl
+      // Safari는 body append 없이 a.click()이 동작하지 않음
+      document.body.appendChild(a)
       a.click()
+      document.body.removeChild(a)
       toast.success('PNG 저장됨')
     } catch {
       toast.error('PNG 내보내기 실패')
