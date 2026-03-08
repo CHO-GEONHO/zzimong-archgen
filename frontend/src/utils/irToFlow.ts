@@ -125,6 +125,10 @@ export function irToFlow(ir: ArchIR): { nodes: Node[], edges: Edge[] } {
       target: edge.to,
       label: edge.label || '',
       style: lineStyle,
+      labelStyle: { fill: '#e2e8f0', fontSize: 11, fontWeight: 500 },
+      labelBgStyle: { fill: 'rgba(15,16,25,0.85)', stroke: 'rgba(255,255,255,0.08)' },
+      labelBgPadding: [4, 8] as [number, number],
+      labelBgBorderRadius: 4,
       animated: edge.line_type === 'data',
       markerEnd: (edge.arrow || 'forward') !== 'backward' ? {
         type: MarkerType.ArrowClosed,
