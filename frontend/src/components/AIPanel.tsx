@@ -2,7 +2,7 @@ import { useState } from 'react'
 import toast from 'react-hot-toast'
 import type { ArchIR } from "../App"
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8081'
+const API_BASE = ''
 
 const QUICK_QUERIES = [
   'SPOF(단일 장애점) 찾아줘',

@@ -5,21 +5,29 @@ import { MarkerType } from "reactflow"
 import type { Node, Edge } from "reactflow"
 import type { ArchIR } from "../App"
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8081'
+const API_BASE = ''
 
 /**
  * 아이콘 경로 → URL 변환
  * - "logos:aws-ec2" 형식 → Iconify CDN URL
  * - "aws/ec2.svg" 형식 → 로컬 서버 URL
  */
+// 이미 자체 컬러를 가진 아이콘 팩 (white 강제 금지)
+const COLORED_PREFIXES = new Set([
+  'logos', 'devicon', 'devicon-plain', 'vscode-icons',
+  'flat-color-icons', 'skill-icons', 'noto', 'noto-v1',
+  'emojione', 'twemoji',
+])
+
 export function resolveIconUrl(icon: string | null | undefined): string | null {
   if (!icon) return null
 
   // Iconify 형식: "prefix:icon-name" (슬래시 없고 콜론 있음)
   if (icon.includes(':') && !icon.includes('/')) {
     const [prefix, name] = icon.split(':')
-    // 컬러 버전: color=currentColor로 SVG 렌더링
-    return `https://api.iconify.design/${prefix}/${name}.svg?color=%23ffffff&height=32`
+    // 컬러 팩은 color 파라미터 없이, 모노크롬은 흰색으로
+    const colorParam = COLORED_PREFIXES.has(prefix) ? '' : '&color=%23e2e8f0'
+    return `https://api.iconify.design/${prefix}/${name}.svg?height=32${colorParam}`
   }
 
   // 로컬 파일 형식: "aws/ec2.svg"

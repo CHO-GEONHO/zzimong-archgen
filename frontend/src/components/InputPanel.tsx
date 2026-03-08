@@ -2,7 +2,8 @@ import { useState } from 'react'
 import toast from 'react-hot-toast'
 import type { ArchIR } from "../App"
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8081'
+// 항상 상대경로 사용 — 백엔드가 같은 오리진에서 프론트를 서빙
+const API_BASE = ''
 
 type InputTab = 'text' | 'cli' | 'git'
 

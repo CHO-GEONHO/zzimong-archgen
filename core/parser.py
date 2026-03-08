@@ -10,11 +10,12 @@ from core.llm import get_llm_client, get_model_name
 # 형식: "prefix:icon-name" (https://api.iconify.design/{prefix}/{icon-name}.svg)
 ICON_REFERENCE = """
 ### Iconify 아이콘 참조 (icon 필드에 "prefix:name" 형식으로 사용)
+※ 검증된 아이콘만 포함. logos: 팩은 컬러 자체 보유, skill-icons: 컬러 자체 보유, mdi:/carbon: 은 모노크롬.
 
-#### AWS
+#### AWS (검증됨)
 - EC2, 서버, WAS, 앱서버 → "logos:aws-ec2"
 - ECS, Fargate → "logos:aws-ecs"
-- EKS, Kubernetes(AWS) → "logos:amazon-eks"
+- EKS, Kubernetes(AWS) → "simple-icons:amazoneks"
 - Lambda, 서버리스, 함수 → "logos:aws-lambda"
 - S3, 오브젝트 스토리지 → "logos:aws-s3"
 - RDS, MySQL(AWS), PostgreSQL(AWS), 관계형DB → "logos:aws-rds"
@@ -23,9 +24,9 @@ ICON_REFERENCE = """
 - SQS, 메시지 큐(AWS) → "simple-icons:amazonsqs"
 - SNS, 알림, 토픽 → "simple-icons:amazonsns"
 - CloudFront, CDN(AWS) → "logos:aws-cloudfront"
-- ALB, NLB, ELB, 로드밸런서(AWS) → "logos:aws-elastic-load-balancing"
+- ALB, NLB, ELB, 로드밸런서(AWS) → "skill-icons:aws-light"
 - API Gateway(AWS) → "logos:aws-api-gateway"
-- Route53, DNS(AWS) → "logos:aws-route-53"
+- Route53, DNS(AWS) → "simple-icons:amazonroute53"
 - CloudWatch, 모니터링(AWS) → "logos:aws-cloudwatch"
 - IAM, 권한(AWS) → "logos:aws-iam"
 - Cognito, 인증(AWS) → "logos:aws-cognito"
@@ -34,7 +35,7 @@ ICON_REFERENCE = """
 - WAF, 방화벽(AWS) → "logos:aws-waf"
 - VPC, 네트워크(AWS) → "logos:aws-vpc"
 - NAT Gateway → "logos:aws-nat-gateway"
-- ECR, 컨테이너 레지스트리(AWS) → "logos:aws-ecr"
+- ECR, 컨테이너 레지스트리(AWS) → "simple-icons:amazonecr"
 - CodePipeline, CI/CD(AWS) → "logos:aws-codepipeline"
 - Kinesis, 스트리밍(AWS) → "logos:aws-kinesis"
 - Glue, ETL(AWS) → "logos:aws-glue"
@@ -43,60 +44,47 @@ ICON_REFERENCE = """
 - Step Functions → "logos:aws-step-functions"
 - CloudFormation, IaC(AWS) → "logos:aws-cloudformation"
 
-#### Azure
-- AKS, Kubernetes(Azure) → "logos:microsoft-azure"
-- Azure SQL, SQL Database → "logos:azure-sql-database"
-- Azure Storage → "logos:azure-storage-blob"
-- Azure Functions → "logos:azure-functions"
-- Azure App Service → "logos:azure-app-service"
-- Azure Container Registry → "logos:azure-container-registry"
-- Azure Redis Cache → "logos:azure-redis-cache"
-- Azure Load Balancer → "logos:azure-load-balancer"
-- Azure API Management → "logos:azure-api-management"
-- Azure Cosmos DB → "logos:azure-cosmos-db"
-- Azure Service Bus → "logos:azure-service-bus"
-- Azure Front Door, CDN(Azure) → "logos:azure-cdn"
+#### Azure (검증됨)
+- 모든 Azure 서비스 → "skill-icons:azure-light"
+- AKS, Kubernetes(Azure) → "skill-icons:azure-light"
+- Azure SQL, CosmosDB, Storage, Functions 등 → "skill-icons:azure-light"
 
-#### GCP
-- GKE, Kubernetes(GCP) → "logos:google-kubernetes-engine"
-- Cloud Run → "logos:google-cloud-run"
-- Cloud SQL → "logos:google-cloud-sql"
-- Cloud Storage(GCP) → "logos:google-cloud-storage"
-- Pub/Sub → "logos:google-cloud-pub-sub"
-- BigQuery → "logos:google-bigquery"
-- Firestore → "logos:firebase"
-- Cloud Functions(GCP) → "logos:google-cloud-functions"
-- Cloud CDN → "logos:google-cloud-cdn"
+#### GCP (검증됨)
+- 모든 GCP 서비스 → "skill-icons:gcp-light"
+- GKE, Cloud Run, BigQuery, Firestore, Pub/Sub 등 → "skill-icons:gcp-light"
+- BigQuery 특별 → "simple-icons:googlebigquery"
+- Firebase → "logos:firebase"
 
-#### Kubernetes / 컨테이너
-- Pod, 파드 → "logos:kubernetes"
-- Deployment → "logos:kubernetes"
-- Service(k8s) → "logos:kubernetes"
-- Ingress(k8s) → "logos:nginx"
+#### Kubernetes / 컨테이너 (검증됨)
+- Pod, Deployment, Service, Namespace, 쿠버네티스 전반 → "skill-icons:kubernetes"
+- Ingress(k8s), Nginx Ingress → "logos:nginx"
 - Helm → "logos:helm"
-- Istio, 서비스 메시 → "logos:istio"
+- Istio, 서비스 메시 → "simple-icons:istio"
+- Podman → "simple-icons:podman"
+- Docker, 컨테이너 → "skill-icons:docker"
 
-#### 데이터베이스 / 캐시
+#### 데이터베이스 / 캐시 (검증됨)
 - MySQL → "logos:mysql"
 - PostgreSQL → "logos:postgresql"
 - MongoDB → "logos:mongodb-icon"
 - Redis → "logos:redis"
 - Elasticsearch, OpenSearch → "logos:elasticsearch"
-- Kafka → "logos:apache-kafka"
+- Kafka → "skill-icons:kafka"
 - RabbitMQ → "logos:rabbitmq-icon"
+- Cassandra → "simple-icons:apachecassandra"
 
-#### 인프라 / 도구
+#### 인프라 / 도구 (검증됨)
 - Nginx → "logos:nginx"
 - Apache → "logos:apache"
-- Docker → "logos:docker-icon"
-- Prometheus → "logos:prometheus-icon"
-- Grafana → "logos:grafana"
+- Prometheus → "skill-icons:prometheus"
+- Grafana → "skill-icons:grafana-light"
 - Jenkins → "logos:jenkins"
 - GitHub → "logos:github-icon"
 - GitLab → "logos:gitlab"
-- Terraform → "logos:terraform-icon"
+- Terraform → "skill-icons:terraform-light"
 - Ansible → "logos:ansible"
 - Vault → "logos:vault-icon"
+- Traefik → "simple-icons:traefikproxy"
 
 #### 일반 / 개념
 - 사용자, 브라우저, 클라이언트, 외부 → "mdi:account-circle-outline"

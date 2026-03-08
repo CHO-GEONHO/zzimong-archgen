@@ -21,7 +21,7 @@ interface Props {
   onSearchIcon?: (nodeId: string, nodeType: string, label: string) => void
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8081'
+const API_BASE = ''
 
 export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
