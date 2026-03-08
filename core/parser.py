@@ -1,10 +1,11 @@
 """텍스트 파서: 마크다운/자연어 → JSON IR (v2 — Iconify + DataFlow)"""
 import json
+import os
 import uuid
 from datetime import datetime
 from typing import Optional
 
-from core.llm import get_llm_client, get_model_name
+from core.llm import get_llm_client, get_fallback_client, get_model_name, get_fallback_model_name
 
 # Iconify CDN에서 바로 사용 가능한 아이콘 매핑 테이블
 # 형식: "prefix:icon-name" (https://api.iconify.design/{prefix}/{icon-name}.svg)
@@ -218,37 +219,63 @@ class TextParser:
     def __init__(self):
         self.client = get_llm_client()
         self.model = get_model_name()
-        self.max_retries = 3
+        # Fallback은 DeepSeek 사용 시에만 의미있음
+        if os.getenv("DEEPSEEK_API_KEY"):
+            self.fallback_client = get_fallback_client()
+            self.fallback_model = get_fallback_model_name()
+        else:
+            self.fallback_client = None
+            self.fallback_model = None
+
+    def _call_llm(self, client, model: str, text: str) -> dict | None:
+        """LLM 호출 → IR dict 반환. 실패 시 None"""
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": (
+                    f"다음 인프라 설명을 분석하여 JSON IR로 변환하세요.\n"
+                    f"모든 노드에 icon 필드를 채우고, data_flow를 상세히 작성하세요.\n\n"
+                    f"---\n{text}\n---"
+                )},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.1,
+            max_tokens=4000,
+        )
+        raw = response.choices[0].message.content
+        return self._validate_and_fix(raw)
 
     async def parse(self, text: str) -> dict:
-        """텍스트 → JSON IR. 실패 시 최대 3회 재시도"""
-        last_error = None
-        for attempt in range(self.max_retries):
+        """텍스트 → JSON IR. DeepSeek 실패 시 Gemini fallback"""
+        # 1차: primary (DeepSeek)
+        try:
+            ir = self._call_llm(self.client, self.model, text)
+            if ir:
+                return ir
+        except Exception as primary_err:
+            # primary 실패 → fallback 시도
+            if self.fallback_client and self.fallback_client is not self.client:
+                try:
+                    ir = self._call_llm(self.fallback_client, self.fallback_model, text)
+                    if ir:
+                        return ir
+                except Exception as fallback_err:
+                    raise RuntimeError(
+                        f"파싱 실패 — primary: {primary_err}, fallback: {fallback_err}"
+                    )
+            raise RuntimeError(f"파싱 실패: {primary_err}")
+
+        # primary가 None 반환(JSON 파싱 실패) → fallback
+        if self.fallback_client:
             try:
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": (
-                            f"다음 인프라 설명을 분석하여 JSON IR로 변환하세요.\n"
-                            f"모든 노드에 icon 필드를 채우고, data_flow를 상세히 작성하세요.\n\n"
-                            f"---\n{text}\n---"
-                        )},
-                    ],
-                    response_format={"type": "json_object"},
-                    temperature=0.1,
-                    max_tokens=4000,
-                )
-                raw = response.choices[0].message.content
-                ir = self._validate_and_fix(raw)
+                ir = self._call_llm(self.fallback_client, self.fallback_model, text)
                 if ir:
                     return ir
             except Exception as e:
-                last_error = e
-                if attempt < self.max_retries - 1:
-                    continue
+                raise RuntimeError(f"파싱 실패 (fallback): {e}")
 
-        raise RuntimeError(f"파싱 실패 ({self.max_retries}회 시도): {last_error}")
+        raise RuntimeError("파싱 실패: JSON 변환 불가")
 
     def _validate_and_fix(self, raw: str) -> Optional[dict]:
         """JSON 파싱 + 스키마 검증. 누락 필드 자동 보완"""
