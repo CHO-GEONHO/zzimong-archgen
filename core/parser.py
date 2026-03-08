@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from core.llm import get_llm_client, get_fallback_client, get_model_name, get_fallback_model_name
+from core.llm import get_llm_client, get_fallback_client, get_model_name, get_parse_client, PARSE_MODEL
 
 # Iconify CDN에서 바로 사용 가능한 아이콘 매핑 테이블
 # 형식: "prefix:icon-name" (https://api.iconify.design/{prefix}/{icon-name}.svg)
@@ -218,12 +218,13 @@ SYSTEM_PROMPT = f"""당신은 인프라 아키텍처 다이어그램 전문가�
 
 class TextParser:
     def __init__(self):
-        self.client = get_llm_client()
-        self.model = get_model_name()
-        # Fallback은 DeepSeek 사용 시에만 의미있음
+        # 초기 다이어그램 생성: Gemini Pro 우선 (빠르고 복잡한 JSON 생성에 적합)
+        self.client = get_parse_client()
+        self.model = PARSE_MODEL
+        # Fallback: DeepSeek (Gemini Pro 실패 시)
         if os.getenv("DEEPSEEK_API_KEY"):
-            self.fallback_client = get_fallback_client()
-            self.fallback_model = get_fallback_model_name()
+            self.fallback_client = get_llm_client()
+            self.fallback_model = get_model_name()
         else:
             self.fallback_client = None
             self.fallback_model = None
@@ -242,9 +243,11 @@ class TextParser:
             ],
             response_format={"type": "json_object"},
             temperature=0.1,
-            max_tokens=4000,
+            max_tokens=16000,  # Gemini 2.5 Pro는 thinking 토큰 포함 (최대 ~4000 thinking + ~4000 JSON)
         )
         raw = response.choices[0].message.content
+        if raw is None:
+            return None
         return self._validate_and_fix(raw)
 
     async def parse(self, text: str) -> dict:
