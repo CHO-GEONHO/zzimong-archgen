@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { Connection } from 'reactflow'
 import ReactFlow, {
   Background,
@@ -26,6 +26,7 @@ const API_BASE = ''
 export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const skipIrToFlowRef = useRef(false)
 
   // onSearchIcon을 InfraNode에 주입
   const nodeTypes = useMemo(() => ({
@@ -37,6 +38,12 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon 
 
   useEffect(() => {
     if (!ir) return
+    // 드래그로 인한 IR 변경 시 irToFlow 재실행 방지
+    // (auto-fit이 그룹 크기/위치를 다시 계산해 그룹이 점프하는 문제)
+    if (skipIrToFlowRef.current) {
+      skipIrToFlowRef.current = false
+      return
+    }
     const { nodes: newNodes, edges: newEdges } = irToFlow(ir)
     setNodes(newNodes)
     setEdges(newEdges)
@@ -49,6 +56,7 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon 
 
   const onNodeDragStop = useCallback(() => {
     if (!ir) return
+    skipIrToFlowRef.current = true
     const updatedIr = flowToIR(ir, nodes, edges)
     onIrChange(updatedIr)
   }, [ir, nodes, edges, onIrChange])
