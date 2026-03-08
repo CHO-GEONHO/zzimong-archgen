@@ -45,6 +45,18 @@ class CLIParser:
         if "services:" in stripped and "image:" in stripped:
             return "docker_compose"
 
+        # docker ps JSON (--format json)
+        try:
+            lines = [l.strip() for l in stripped.splitlines() if l.strip()]
+            if lines and lines[0].startswith("{") and '"Image"' in lines[0]:
+                return "docker_ps_json"
+        except Exception:
+            pass
+
+        # docker ps 테이블 출력
+        if stripped.startswith("CONTAINER ID") and "IMAGE" in stripped and "NAMES" in stripped:
+            return "docker_ps_table"
+
         return "unknown"
 
     async def parse(self, raw: str) -> dict:
@@ -59,6 +71,10 @@ class CLIParser:
             return self._parse_azure_resource_list(raw)
         elif fmt == "docker_compose":
             return self._parse_docker_compose(raw)
+        elif fmt == "docker_ps_json":
+            return self._parse_docker_ps_json(raw)
+        elif fmt == "docker_ps_table":
+            return self._parse_docker_ps_table(raw)
         else:
             # LLM fallback
             return await self._llm_parse(raw, fmt)
@@ -283,6 +299,122 @@ class CLIParser:
             "groups": [],
             "nodes": nodes,
             "edges": edges,
+            "legend": [],
+        }
+
+    def _parse_docker_ps_json(self, raw: str) -> dict:
+        """docker ps --format json (NDJSON) 파싱"""
+        nodes = []
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            name = item.get("Names", "unknown").lstrip("/")
+            image = item.get("Image", "")
+            state = item.get("State", "unknown")
+            ports = item.get("Ports", "")
+            container_id = item.get("ID", "")
+
+            status_color = "#4ade80" if state == "running" else "#f87171"
+            node_id = f"node-{uuid.uuid4().hex[:8]}"
+            nodes.append({
+                "id": node_id,
+                "label": name,
+                "sublabel": image,
+                "type": "docker_container",
+                "icon": "logos/docker.svg",
+                "position": {"x": len(nodes) * 220, "y": 200},
+                "tags": [state],
+                "port": ports.split(",")[0].strip() if ports else "",
+                "metadata": {"container_id": container_id[:12], "state": state, "image": image},
+                "status_color": status_color,
+            })
+
+        return {
+            "meta": {
+                "title": "Docker Containers",
+                "version": "1.0",
+                "created_at": datetime.utcnow().isoformat() + "Z",
+                "source_type": "cli",
+                "theme": "light",
+            },
+            "groups": [],
+            "nodes": nodes,
+            "edges": [],
+            "legend": [],
+        }
+
+    def _parse_docker_ps_table(self, raw: str) -> dict:
+        """docker ps 테이블 출력 파싱"""
+        lines = [l for l in raw.splitlines() if l.strip()]
+        if not lines:
+            return self._empty_ir("Docker containers")
+
+        # 헤더 파싱으로 컬럼 위치 확인
+        header = lines[0]
+        col_starts = []
+        for col in ["CONTAINER ID", "IMAGE", "COMMAND", "CREATED", "STATUS", "PORTS", "NAMES"]:
+            idx = header.find(col)
+            if idx != -1:
+                col_starts.append((col, idx))
+        col_starts.sort(key=lambda x: x[1])
+
+        def extract_col(line: str, col_name: str) -> str:
+            positions = {c: i for c, i in col_starts}
+            start = positions.get(col_name, -1)
+            if start == -1:
+                return ""
+            # 다음 컬럼 시작 전까지
+            col_order = [c for c, _ in col_starts]
+            idx = col_order.index(col_name)
+            if idx + 1 < len(col_starts):
+                end = col_starts[idx + 1][1]
+                return line[start:end].strip()
+            return line[start:].strip()
+
+        nodes = []
+        for row in lines[1:]:
+            if not row.strip():
+                continue
+            name = extract_col(row, "NAMES")
+            image = extract_col(row, "IMAGE")
+            status = extract_col(row, "STATUS")
+            ports = extract_col(row, "PORTS")
+            container_id = extract_col(row, "CONTAINER ID")
+
+            state = "running" if status.lower().startswith("up") else "exited"
+            status_color = "#4ade80" if state == "running" else "#f87171"
+
+            node_id = f"node-{uuid.uuid4().hex[:8]}"
+            nodes.append({
+                "id": node_id,
+                "label": name or container_id[:12],
+                "sublabel": image,
+                "type": "docker_container",
+                "icon": "logos/docker.svg",
+                "position": {"x": len(nodes) * 220, "y": 200},
+                "tags": [state],
+                "port": ports.split(",")[0].strip() if ports else "",
+                "metadata": {"container_id": container_id[:12], "state": state, "status": status, "image": image},
+                "status_color": status_color,
+            })
+
+        return {
+            "meta": {
+                "title": "Docker Containers",
+                "version": "1.0",
+                "created_at": datetime.utcnow().isoformat() + "Z",
+                "source_type": "cli",
+                "theme": "light",
+            },
+            "groups": [],
+            "nodes": nodes,
+            "edges": [],
             "legend": [],
         }
 

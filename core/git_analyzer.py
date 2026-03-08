@@ -27,7 +27,7 @@ PRIORITY_PATTERNS = [
 ]
 
 MAX_FILE_SIZE = 50_000  # 50KB per file
-TOKEN_BUDGET = 60_000   # 약 60K 토큰
+TOKEN_BUDGET = 40_000   # 약 40K 토큰 (DeepSeek 64K 한도 내 안전 마진)
 
 
 class GitAnalyzer:
