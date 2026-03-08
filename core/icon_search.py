@@ -1,9 +1,11 @@
-"""동적 아이콘 검색 (Iconify API 연동 - Azure/K8s 강화)"""
+"""동적 아이콘 검색 (로컬 DB 우선 + Iconify API 폴백)"""
+import json
 import httpx
 import os
 from pathlib import Path
 
 ICONS_DIR = Path(os.getenv("ICONS_DIR", "/Volumes/OpenClawSSD/projects/archgen/icons"))
+MANIFEST_PATH = ICONS_DIR / "manifest.json"
 
 # 자체 컬러를 가진 팩 (preview에 color 파라미터 금지)
 COLORED_PREFIXES = {
@@ -14,6 +16,19 @@ COLORED_PREFIXES = {
 
 # 인프라 관련 우선 팩 (검색 결과 정렬용)
 INFRA_PRIORITY_PREFIXES = ['skill-icons', 'logos', 'devicon', 'simple-icons', 'mdi', 'carbon']
+
+# manifest 캐시 (서버 시작 시 1회 로드)
+_manifest_cache = None
+
+
+def _load_manifest() -> dict:
+    global _manifest_cache
+    if _manifest_cache is None:
+        if MANIFEST_PATH.exists():
+            _manifest_cache = json.loads(MANIFEST_PATH.read_text())
+        else:
+            _manifest_cache = {}
+    return _manifest_cache
 
 
 def make_preview_url(icon_id: str) -> str:
@@ -136,50 +151,127 @@ KEYWORD_MAPPING = {
 
 class IconSearch:
     async def search(self, node_type: str, context: str = "") -> list:
-        """Iconify API 실시간 검색 (AKS/K8s/Azure/GCP 강화)"""
+        """로컬 DB 우선 검색 + Iconify API 폴백"""
         keywords = self._generate_keywords(node_type, context)
         results = []
         seen = set()
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            for keyword in keywords[:3]:
+        # === 1단계: 로컬 manifest에서 먼저 검색 ===
+        local_results = self._search_local(node_type, keywords)
+        for r in local_results:
+            seen.add(r["id"])
+            results.append(r)
+
+        # 로컬에서 충분히 나왔으면 Iconify 스킵 가능 (최소 8개)
+        need_web = len(results) < 8
+
+        # === 2단계: Iconify API 검색 (부족하면) ===
+        if need_web:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                for keyword in keywords[:3]:
+                    try:
+                        resp = await client.get(
+                            "https://api.iconify.design/search",
+                            params={
+                                "query": keyword,
+                                "limit": 8,
+                                "prefixes": ",".join(INFRA_PRIORITY_PREFIXES),
+                            },
+                        )
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            for icon_id in data.get("icons", []):
+                                if icon_id not in seen:
+                                    seen.add(icon_id)
+                                    parts = icon_id.split(":")
+                                    if len(parts) == 2:
+                                        prefix, name = parts
+                                        results.append({
+                                            "id": icon_id,
+                                            "name": name,
+                                            "source": prefix,
+                                            "preview_url": make_preview_url(icon_id),
+                                            "download_url": f"https://api.iconify.design/{prefix}/{name}.svg",
+                                        })
+                    except Exception:
+                        pass
+
+            # Iconify 결과만 인프라 팩 우선순위 정렬 (로컬 결과는 이미 앞에)
+            local_count = len(local_results)
+            web_results = results[local_count:]
+            def sort_key(r):
                 try:
-                    resp = await client.get(
-                        "https://api.iconify.design/search",
-                        params={
-                            "query": keyword,
-                            "limit": 8,
-                            "prefixes": ",".join(INFRA_PRIORITY_PREFIXES),
-                        },
-                    )
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        for icon_id in data.get("icons", []):
-                            if icon_id not in seen:
-                                seen.add(icon_id)
-                                parts = icon_id.split(":")
-                                if len(parts) == 2:
-                                    prefix, name = parts
-                                    results.append({
-                                        "id": icon_id,
-                                        "name": name,
-                                        "source": prefix,
-                                        "preview_url": make_preview_url(icon_id),
-                                        "download_url": f"https://api.iconify.design/{prefix}/{name}.svg",
-                                    })
-                except Exception:
-                    pass
+                    prefix = r["id"].split(":")[0]
+                    return INFRA_PRIORITY_PREFIXES.index(prefix)
+                except ValueError:
+                    return 99
+            web_results.sort(key=sort_key)
+            results = results[:local_count] + web_results
 
-        # 인프라 팩 우선순위 정렬
-        def sort_key(r):
-            try:
-                prefix = r["id"].split(":")[0]
-                return INFRA_PRIORITY_PREFIXES.index(prefix)
-            except ValueError:
-                return 99
+        return results[:24]
 
-        results.sort(key=sort_key)
-        return results[:16]
+    def _search_local(self, node_type: str, keywords: list) -> list:
+        """로컬 manifest에서 키워드 매칭 검색"""
+        manifest = _load_manifest()
+        if not manifest:
+            return []
+
+        results = []
+        seen_keys = set()
+        seen_paths = set()  # path 기반 중복 제거
+        query = node_type.lower().replace(" ", "_").replace("-", "_")
+
+        def add_result(key, path):
+            if key in seen_keys or path in seen_paths:
+                return
+            results.append(self._make_local_result(key, path))
+            seen_keys.add(key)
+            seen_paths.add(path)
+
+        # 1) 정확한 키 매칭
+        if query in manifest:
+            add_result(query, manifest[query])
+
+        # 2) 키워드 기반 부분 매칭 (키에서 검색)
+        search_terms = set()
+        search_terms.add(query)
+        for kw in keywords:
+            search_terms.add(kw.lower().replace("-", "_").replace(" ", "_"))
+            search_terms.add(kw.lower().replace("_", "-").replace(" ", "-"))
+
+        for manifest_key, path in manifest.items():
+            if manifest_key in seen_keys:
+                continue
+            mk_lower = manifest_key.lower()
+            for term in search_terms:
+                if len(term) >= 3 and (term in mk_lower or mk_lower in term):
+                    add_result(manifest_key, path)
+                    break
+
+        # 3) 파일 경로 기반 검색 (예: "redis" → databases/redis.svg, azure-official/cache-redis.svg)
+        for manifest_key, path in manifest.items():
+            if manifest_key in seen_keys:
+                continue
+            fname = path.lower().rsplit("/", 1)[-1].replace(".svg", "")
+            for term in search_terms:
+                clean = term.replace("_", "-")
+                if len(clean) >= 3 and (clean in fname or fname in clean):
+                    add_result(manifest_key, path)
+                    break
+
+        return results[:12]
+
+    def _make_local_result(self, key: str, path: str) -> dict:
+        """로컬 아이콘 → 검색 결과 형식"""
+        name = path.rsplit("/", 1)[-1].replace(".svg", "")
+        source_dir = path.split("/")[0]
+        return {
+            "id": path,  # 로컬 경로 그대로 (irToFlow.ts가 /icons/ prefix 붙임)
+            "name": name,
+            "source": f"local:{source_dir}",
+            "preview_url": f"/icons/{path}",
+            "download_url": f"/icons/{path}",
+        }
 
     def _generate_keywords(self, node_type: str, context: str = "") -> list:
         """node_type + context → 검색 키워드 목록"""
