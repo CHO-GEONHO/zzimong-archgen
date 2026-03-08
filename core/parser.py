@@ -227,7 +227,7 @@ class TextParser:
             self.fallback_client = None
             self.fallback_model = None
 
-    def _call_llm(self, client, model: str, text: str) -> dict | None:
+    def _call_llm(self, client, model: str, text: str) -> Optional[dict]:
         """LLM 호출 → IR dict 반환. 실패 시 None"""
         response = client.chat.completions.create(
             model=model,

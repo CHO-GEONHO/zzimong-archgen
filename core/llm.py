@@ -1,11 +1,12 @@
 """LLM 클라이언트 팩토리 (DeepSeek primary, Gemini fallback)"""
 import os
+from typing import Optional
 from openai import OpenAI
 
 LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "90"))  # 기본 90초
 
 
-def get_llm_client(timeout: float | None = None) -> OpenAI:
+def get_llm_client(timeout: Optional[float] = None) -> OpenAI:
     """
     DeepSeek API 클라이언트 반환.
     DEEPSEEK_API_KEY 없으면 FALLBACK으로 Gemini 사용.
@@ -36,7 +37,7 @@ def get_llm_client(timeout: float | None = None) -> OpenAI:
         raise RuntimeError("DEEPSEEK_API_KEY가 설정되지 않았습니다.")
 
 
-def get_fallback_client(timeout: float | None = None) -> OpenAI | None:
+def get_fallback_client(timeout: Optional[float] = None) -> Optional[OpenAI]:
     """Gemini fallback 클라이언트 (DeepSeek 실패 시)"""
     fallback_key = os.getenv("FALLBACK_API_KEY", os.getenv("GOOGLE_API_KEY", ""))
     if not fallback_key:
