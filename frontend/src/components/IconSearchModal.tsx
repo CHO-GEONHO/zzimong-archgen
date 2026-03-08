@@ -2,6 +2,13 @@ import { useState, useEffect } from 'react'
 
 const API_BASE = ''
 
+// 자체 컬러를 가진 팩 (color 파라미터 금지)
+const COLORED_PREFIXES = new Set([
+  'logos', 'devicon', 'devicon-plain', 'vscode-icons',
+  'flat-color-icons', 'skill-icons', 'noto', 'noto-v1',
+  'emojione', 'twemoji',
+])
+
 interface IconResult {
   id: string
   name: string
@@ -18,12 +25,41 @@ interface Props {
   onClose: () => void
 }
 
+function makePreviewUrl(iconId: string): string {
+  const parts = iconId.split(':')
+  if (parts.length !== 2) return `https://api.iconify.design/${iconId}.svg`
+  const [prefix, name] = parts
+  const color = COLORED_PREFIXES.has(prefix) ? '' : '&color=%23e2e8f0'
+  return `https://api.iconify.design/${prefix}/${name}.svg?height=48${color}`
+}
+
+/** Iconify API 직접 검색 (백엔드 실패 시 폴백) */
+async function searchIconifyDirect(query: string): Promise<IconResult[]> {
+  const prefixes = 'skill-icons,logos,devicon,simple-icons,mdi,carbon'
+  const resp = await fetch(
+    `https://api.iconify.design/search?query=${encodeURIComponent(query)}&limit=24&prefixes=${prefixes}`
+  )
+  const data = await resp.json()
+  const icons: string[] = data.icons || []
+  return icons.map(id => {
+    const [prefix, name] = id.split(':')
+    return {
+      id,
+      name: name || id,
+      source: prefix || '',
+      preview_url: makePreviewUrl(id),
+      download_url: `https://api.iconify.design/${prefix}/${name}.svg`,
+    }
+  })
+}
+
 export default function IconSearchModal({ nodeId, nodeType, nodeLabel, onApply, onClose }: Props) {
   const [results, setResults] = useState<IconResult[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [hovered, setHovered] = useState<string | null>(null)
+  const [errMsg, setErrMsg] = useState('')
 
   // 최초 로드: 노드 타입으로 자동 검색
   useEffect(() => {
@@ -32,20 +68,36 @@ export default function IconSearchModal({ nodeId, nodeType, nodeLabel, onApply, 
 
   const fetchIcons = async (searchQuery: string) => {
     setLoading(true)
+    setErrMsg('')
+    let items: IconResult[] = []
+
+    // 1차: 백엔드 검색 (키워드 매핑 + Iconify)
     try {
       const resp = await fetch(`${API_BASE}/api/icons/search`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ node_type: searchQuery, context: nodeLabel }),
       })
-      const data = await resp.json()
-      setResults(data.results || [])
+      if (resp.ok) {
+        const data = await resp.json()
+        items = data.results || []
+      }
     } catch {
-      setResults([])
-    } finally {
-      setLoading(false)
-      setSearching(false)
+      // 백엔드 실패 - 폴백으로 진행
     }
+
+    // 2차: 백엔드 결과 없으면 Iconify 직접 검색
+    if (items.length === 0) {
+      try {
+        items = await searchIconifyDirect(searchQuery)
+      } catch {
+        setErrMsg('Iconify API 연결 실패')
+      }
+    }
+
+    setResults(items)
+    setLoading(false)
+    setSearching(false)
   }
 
   const handleSearch = () => {
@@ -55,7 +107,6 @@ export default function IconSearchModal({ nodeId, nodeType, nodeLabel, onApply, 
   }
 
   const handleApply = (result: IconResult) => {
-    // Iconify CDN 형식으로 변환: "prefix:name"
     onApply(nodeId, result.id)
     onClose()
   }
@@ -79,7 +130,7 @@ export default function IconSearchModal({ nodeId, nodeType, nodeLabel, onApply, 
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            placeholder="예: kubernetes, redis, nginx..."
+            placeholder="예: kubernetes, redis, nginx, lock, building..."
             className="icon-modal-input"
             autoFocus
           />
@@ -99,7 +150,9 @@ export default function IconSearchModal({ nodeId, nodeType, nodeLabel, onApply, 
               <span className="icon-modal-spinner">⟳</span> 검색 중...
             </div>
           ) : results.length === 0 ? (
-            <div className="icon-modal-empty">결과 없음. 다른 키워드로 검색해보세요.</div>
+            <div className="icon-modal-empty">
+              {errMsg || '결과 없음. 영문 키워드로 검색해보세요. (예: lock, cart, database)'}
+            </div>
           ) : (
             <div className="icon-modal-grid">
               {results.map(r => (
