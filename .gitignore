@@ -1,0 +1,36 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+*.so
+
+# 환경 변수 (API 키)
+.env
+*.env.*
+
+# 데이터베이스
+db/*.db
+db/*.db-shm
+db/*.db-wal
+
+# 생성된 파일
+output/
+tmp/
+logs/
+icons/cache/
+
+# 프론트엔드 빌드 (빌드는 로컬에서)
+# frontend/dist/  ← 배포 편의상 포함
+
+# macOS
+.DS_Store
+.AppleDouble
+
+# Node.js
+node_modules/
+frontend/node_modules/
