@@ -1,4 +1,5 @@
 """CLI 출력 파서: kubectl/az/gcloud/terraform → JSON IR"""
+import asyncio
 import json
 import yaml
 import uuid
@@ -419,20 +420,24 @@ class CLIParser:
         }
 
     async def _llm_parse(self, raw: str, detected_format: str) -> dict:
-        """알 수 없는 형식 → LLM으로 전체 분석"""
-        from core.parser import SYSTEM_PROMPT
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"다음 CLI 출력을 분석하여 JSON IR로 변환하세요 (감지된 형식: {detected_format}):\n\n{raw[:8000]}"},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.1,
-        )
-        from core.parser import TextParser
+        """알 수 없는 형식 → LLM으로 전체 분석 (스레드풀 실행)"""
+        from core.parser import SYSTEM_PROMPT, TextParser
+
+        def _call():
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": f"다음 CLI 출력을 분석하여 JSON IR로 변환하세요 (감지된 형식: {detected_format}):\n\n{raw[:8000]}"},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.1,
+            )
+            return response.choices[0].message.content
+
+        raw_content = await asyncio.to_thread(_call)
         parser = TextParser()
-        return parser._validate_and_fix(response.choices[0].message.content) or self._empty_ir("unknown format")
+        return parser._validate_and_fix(raw_content) or self._empty_ir("unknown format")
 
     def _empty_ir(self, title: str) -> dict:
         return {

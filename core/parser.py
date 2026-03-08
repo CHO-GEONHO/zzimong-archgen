@@ -1,4 +1,5 @@
 """텍스트 파서: 마크다운/자연어 → JSON IR (v2 — Iconify + DataFlow)"""
+import asyncio
 import json
 import os
 import uuid
@@ -247,34 +248,34 @@ class TextParser:
         return self._validate_and_fix(raw)
 
     async def parse(self, text: str) -> dict:
-        """텍스트 → JSON IR. DeepSeek 실패 시 Gemini fallback"""
-        # 1차: primary (DeepSeek)
+        """텍스트 → JSON IR. 동기 LLM 호출을 thread pool에서 실행 (이벤트 루프 블로킹 방지)."""
+        # 1차: primary (DeepSeek) — 스레드풀에서 실행
+        primary_err = None
         try:
-            ir = self._call_llm(self.client, self.model, text)
+            ir = await asyncio.to_thread(self._call_llm, self.client, self.model, text)
             if ir:
                 return ir
-        except Exception as primary_err:
-            # primary 실패 → fallback 시도
-            if self.fallback_client and self.fallback_client is not self.client:
-                try:
-                    ir = self._call_llm(self.fallback_client, self.fallback_model, text)
-                    if ir:
-                        return ir
-                except Exception as fallback_err:
+        except Exception as e:
+            primary_err = e
+
+        # fallback (Gemini) 시도
+        if self.fallback_client:
+            try:
+                ir = await asyncio.to_thread(
+                    self._call_llm, self.fallback_client, self.fallback_model, text
+                )
+                if ir:
+                    return ir
+                raise RuntimeError("fallback JSON 변환 불가")
+            except Exception as fallback_err:
+                if primary_err:
                     raise RuntimeError(
                         f"파싱 실패 — primary: {primary_err}, fallback: {fallback_err}"
                     )
+                raise RuntimeError(f"파싱 실패 (fallback): {fallback_err}")
+
+        if primary_err:
             raise RuntimeError(f"파싱 실패: {primary_err}")
-
-        # primary가 None 반환(JSON 파싱 실패) → fallback
-        if self.fallback_client:
-            try:
-                ir = self._call_llm(self.fallback_client, self.fallback_model, text)
-                if ir:
-                    return ir
-            except Exception as e:
-                raise RuntimeError(f"파싱 실패 (fallback): {e}")
-
         raise RuntimeError("파싱 실패: JSON 변환 불가")
 
     def _validate_and_fix(self, raw: str) -> Optional[dict]:
