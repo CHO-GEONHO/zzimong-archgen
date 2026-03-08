@@ -162,51 +162,47 @@ class IconSearch:
             seen.add(r["id"])
             results.append(r)
 
-        # 로컬에서 충분히 나왔으면 Iconify 스킵 가능 (최소 8개)
-        need_web = len(results) < 8
-
-        # === 2단계: Iconify API 검색 (부족하면) ===
-        if need_web:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                for keyword in keywords[:3]:
-                    try:
-                        resp = await client.get(
-                            "https://api.iconify.design/search",
-                            params={
-                                "query": keyword,
-                                "limit": 8,
-                                "prefixes": ",".join(INFRA_PRIORITY_PREFIXES),
-                            },
-                        )
-                        if resp.status_code == 200:
-                            data = resp.json()
-                            for icon_id in data.get("icons", []):
-                                if icon_id not in seen:
-                                    seen.add(icon_id)
-                                    parts = icon_id.split(":")
-                                    if len(parts) == 2:
-                                        prefix, name = parts
-                                        results.append({
-                                            "id": icon_id,
-                                            "name": name,
-                                            "source": prefix,
-                                            "preview_url": make_preview_url(icon_id),
-                                            "download_url": f"https://api.iconify.design/{prefix}/{name}.svg",
-                                        })
-                    except Exception:
-                        pass
-
-            # Iconify 결과만 인프라 팩 우선순위 정렬 (로컬 결과는 이미 앞에)
-            local_count = len(local_results)
-            web_results = results[local_count:]
-            def sort_key(r):
+        # === 2단계: Iconify API 검색 (항상 실행, 로컬 뒤에 추가) ===
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            for keyword in keywords[:3]:
                 try:
-                    prefix = r["id"].split(":")[0]
-                    return INFRA_PRIORITY_PREFIXES.index(prefix)
-                except ValueError:
-                    return 99
-            web_results.sort(key=sort_key)
-            results = results[:local_count] + web_results
+                    resp = await client.get(
+                        "https://api.iconify.design/search",
+                        params={
+                            "query": keyword,
+                            "limit": 8,
+                            "prefixes": ",".join(INFRA_PRIORITY_PREFIXES),
+                        },
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        for icon_id in data.get("icons", []):
+                            if icon_id not in seen:
+                                seen.add(icon_id)
+                                parts = icon_id.split(":")
+                                if len(parts) == 2:
+                                    prefix, name = parts
+                                    results.append({
+                                        "id": icon_id,
+                                        "name": name,
+                                        "source": prefix,
+                                        "preview_url": make_preview_url(icon_id),
+                                        "download_url": f"https://api.iconify.design/{prefix}/{name}.svg",
+                                    })
+                except Exception:
+                    pass
+
+        # Iconify 결과만 인프라 팩 우선순위 정렬 (로컬 결과는 이미 앞에)
+        local_count = len(local_results)
+        web_results = results[local_count:]
+        def sort_key(r):
+            try:
+                prefix = r["id"].split(":")[0]
+                return INFRA_PRIORITY_PREFIXES.index(prefix)
+            except ValueError:
+                return 99
+        web_results.sort(key=sort_key)
+        results = results[:local_count] + web_results
 
         return results[:24]
 

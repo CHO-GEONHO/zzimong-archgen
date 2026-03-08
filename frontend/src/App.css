@@ -329,8 +329,8 @@ body::before {
   position: absolute; bottom: 0; left: 0; right: 0; z-index: 20;
   background: rgba(10,10,15,0.92); backdrop-filter: blur(16px);
   border-top: 1px solid rgba(255,255,255,0.08);
-  transition: all 0.2s;
-  max-height: 200px;
+  transition: max-height 0.25s ease;
+  max-height: 50vh; overflow: hidden;
 }
 .dataflow-panel.dataflow-collapsed { max-height: 44px; }
 
@@ -349,35 +349,37 @@ body::before {
 .dataflow-chevron { font-size: 10px; color: rgba(255,255,255,0.3); }
 
 .dataflow-steps {
-  padding: 10px 16px 14px;
-  display: flex; gap: 0; overflow-x: auto;
-  scrollbar-width: none;
+  padding: 12px 20px 16px;
+  display: flex; flex-direction: column; gap: 0;
+  overflow-y: auto; max-height: calc(50vh - 44px);
+  scrollbar-width: thin; scrollbar-color: rgba(167,139,250,0.2) transparent;
 }
-.dataflow-steps::-webkit-scrollbar { display: none; }
+.dataflow-steps::-webkit-scrollbar { width: 4px; }
+.dataflow-steps::-webkit-scrollbar-track { background: transparent; }
+.dataflow-steps::-webkit-scrollbar-thumb { background: rgba(167,139,250,0.2); border-radius: 4px; }
+
 .dataflow-step {
-  display: flex; align-items: flex-start; gap: 8px;
-  min-width: 180px; max-width: 220px; flex-shrink: 0;
-  position: relative; padding-right: 24px;
+  display: flex; align-items: flex-start; gap: 12px;
+  min-height: 36px;
 }
-.dataflow-step:not(:last-child)::after {
-  content: '→'; position: absolute; right: 4px; top: 0;
-  color: rgba(167,139,250,0.4); font-size: 12px;
+.dataflow-step-marker {
+  display: flex; flex-direction: column; align-items: center; flex-shrink: 0;
 }
 .dataflow-step-num {
-  width: 20px; height: 20px; border-radius: 50%;
+  width: 22px; height: 22px; border-radius: 50%;
   background: rgba(167,139,250,0.15); border: 1px solid rgba(167,139,250,0.3);
   color: #c4b5fd; font-size: 10px; font-weight: 700; font-family: monospace;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-.dataflow-step-text { font-size: 11px; color: rgba(255,255,255,0.55); line-height: 1.5; }
-
-/* Mobile dataflow: vertical list */
-@media (max-width: 767px) {
-  .dataflow-steps { flex-direction: column; overflow-x: hidden; overflow-y: auto; max-height: 130px; }
-  .dataflow-step { min-width: unset; max-width: unset; padding-right: 0; }
-  .dataflow-step:not(:last-child)::after { display: none; }
-  .dataflow-step:not(:last-child) { border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px; margin-bottom: 8px; }
+.dataflow-step-line {
+  width: 1px; flex: 1; min-height: 12px;
+  background: linear-gradient(to bottom, rgba(167,139,250,0.3), rgba(167,139,250,0.08));
 }
+.dataflow-step-text {
+  font-size: 12px; color: rgba(255,255,255,0.6); line-height: 1.5;
+  padding: 2px 0 14px;
+}
+.dataflow-step.last .dataflow-step-text { padding-bottom: 4px; }
 
 /* ── ICON SEARCH MODAL ── */
 .icon-modal-overlay {

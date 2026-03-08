@@ -26,7 +26,7 @@ export default function InfraNode({ data }: { data: InfraNodeData }) {
           <div
             className="node-icon-wrap node-icon-clickable"
             title={`${data.iconKey || ''}\n클릭하여 아이콘 변경`}
-            onClick={() => data.onSearchIcon?.(data.nodeId || '', data.nodeType || '', data.label)}
+            onClick={e => { e.stopPropagation(); data.onSearchIcon?.(data.nodeId || '', data.nodeType || '', data.label) }}
           >
             <img
               src={data.iconUrl!}
@@ -48,7 +48,7 @@ export default function InfraNode({ data }: { data: InfraNodeData }) {
         ) : (
           <div
             className="node-icon-placeholder node-icon-missing"
-            onClick={() => data.onSearchIcon?.(data.nodeId || '', data.nodeType || '', data.label)}
+            onClick={e => { e.stopPropagation(); data.onSearchIcon?.(data.nodeId || '', data.nodeType || '', data.label) }}
             title="클릭하여 아이콘 검색"
           >
             {data.nodeType?.[0]?.toUpperCase() || '?'}
