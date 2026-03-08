@@ -1,5 +1,7 @@
 import type { ArchIR } from '../App'
 
+declare const __BUILD_DATE__: string
+
 interface Props {
   ir: ArchIR | null
   diagramId: string | null
@@ -21,7 +23,7 @@ export default function Header({ ir }: Props) {
         </div>
       )}
       <div className="header-right">
-        <span className="version">v1.0.0</span>
+        <span className="version">build {__BUILD_DATE__}</span>
       </div>
     </header>
   )
