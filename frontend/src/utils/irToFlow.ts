@@ -297,6 +297,8 @@ export function irToFlow(ir: ArchIR, theme: DiagramTheme = 'dark'): { nodes: Nod
         line_type: edge.line_type,
         arrow: edge.arrow || 'forward',
         routing,
+        labelOffsetX: edge.label_offset_x ?? 0,
+        labelOffsetY: edge.label_offset_y ?? 0,
       },
     })
   }
@@ -345,10 +347,13 @@ export function flowToIR(
         ...irEdge,
         from: fe.source,
         to: fe.target,
+        label: (fe.label as string) ?? irEdge.label,
         sourceHandle: fe.sourceHandle ?? undefined,
         targetHandle: fe.targetHandle ?? undefined,
         arrow: fe.data?.arrow ?? irEdge.arrow,
         line_type: fe.data?.line_type ?? irEdge.line_type,
+        label_offset_x: fe.data?.labelOffsetX ?? irEdge.label_offset_x,
+        label_offset_y: fe.data?.labelOffsetY ?? irEdge.label_offset_y,
       }
     }
     return irEdge

@@ -223,6 +223,18 @@ body::before {
 .edge-toolbar-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
 .edge-toolbar-btn.active { background: rgba(167,139,250,0.25); border-color: rgba(167,139,250,0.6); color: #a78bfa; }
 .edge-color-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.edge-toolbar-label-input {
+  height: 26px; padding: 0 8px; border-radius: 6px; font-size: 12px;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.8); outline: none; width: 110px;
+  transition: border-color 0.12s;
+}
+.edge-toolbar-label-input::placeholder { color: rgba(255,255,255,0.25); }
+.edge-toolbar-label-input:focus { border-color: rgba(167,139,250,0.6); }
+.app-light .edge-toolbar-label-input {
+  background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); color: #1e293b;
+}
+.app-light .edge-toolbar-label-input:focus { border-color: rgba(124,58,237,0.5); }
 .edge-toolbar-close {
   padding: 3px 7px; border-radius: 6px; font-size: 11px;
   background: transparent; border: none; color: rgba(255,255,255,0.3);

@@ -15,7 +15,7 @@ import { irToFlow, flowToIR, LINE_STYLES_DARK, LINE_STYLES_LIGHT } from '../util
 import type { DiagramTheme } from '../utils/irToFlow'
 import InfraNode from './nodes/InfraNode'
 import GroupNode from './nodes/GroupNode'
-import ArrowEdge from './edges/ArrowEdge'
+import ArrowEdge, { EdgeDataUpdateCtx } from './edges/ArrowEdge'
 
 interface Props {
   ir: ArchIR | null
@@ -88,13 +88,29 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
     [setEdges, getLineStyles],
   )
 
+  // ArrowEdge에서 label 드래그 시 data 업데이트 (context 경유)
+  const handleEdgeDataUpdate = useCallback((id: string, patch: Record<string, unknown>) => {
+    setEdges(eds => eds.map(e =>
+      e.id === id ? { ...e, data: { ...e.data, ...patch } } : e
+    ))
+  }, [setEdges])
+
+  // 툴바 라벨 입력
+  const handleLabelChange = useCallback((label: string) => {
+    setEdges(eds => {
+      const sel = eds.find(e => e.selected)
+      if (!sel) return eds
+      return eds.map(e => e.id === sel.id ? { ...e, label } : e)
+    })
+  }, [setEdges])
+
   // data.arrow만 업데이트 — ArrowEdge 컴포넌트가 직접 읽어서 렌더
   const handleArrowChange = useCallback((arrow: string) => {
     setEdges(eds => {
       const sel = eds.find(e => e.selected)
       if (!sel) return eds
       return eds.map(e =>
-        e.id === sel.id ? { ...e, data: { ...e.data, arrow } } : e
+        e.id === sel.id ? { ...e, data: { ...e.data, arrow }, style: { ...(e.style as object) } } : e
       )
     })
   }, [setEdges])
@@ -205,6 +221,7 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
   const isDark = theme === 'dark'
 
   return (
+    <EdgeDataUpdateCtx.Provider value={handleEdgeDataUpdate}>
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       <ReactFlow
         nodes={nodes}
@@ -245,6 +262,15 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
               ))}
             </div>
             <div className="edge-toolbar-divider" />
+            <input
+              className="edge-toolbar-label-input"
+              type="text"
+              placeholder="라벨 텍스트"
+              value={selectedEdge?.label as string ?? ''}
+              onChange={e => handleLabelChange(e.target.value)}
+              onKeyDown={e => e.stopPropagation()}
+            />
+            <div className="edge-toolbar-divider" />
             <div className="edge-toolbar-group">
               {LINE_TYPE_OPTIONS.map(opt => (
                 <button
@@ -271,5 +297,6 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
         </button>
       </div>
     </div>
+    </EdgeDataUpdateCtx.Provider>
   )
 }
