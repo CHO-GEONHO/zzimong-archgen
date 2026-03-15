@@ -67,6 +67,10 @@ frontend_dist = ARCHGEN_ROOT / "frontend" / "dist"
 if frontend_dist.exists():
     app.mount("/assets", StaticFiles(directory=str(frontend_dist / "assets")), name="assets")
 
+    @app.get("/favicon.png")
+    async def serve_favicon():
+        return FileResponse(str(frontend_dist / "favicon.png"), media_type="image/png")
+
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str):
         """SPA catch-all: API 경로가 아닌 모든 요청은 index.html로"""
