@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import type { Connection } from 'reactflow'
+import type { Connection, Edge } from 'reactflow'
 import ReactFlow, {
   Background,
   Controls,
   MiniMap,
+  MarkerType,
   useNodesState,
   useEdgesState,
   addEdge,
+  updateEdge,
 } from 'reactflow'
 import toast from 'react-hot-toast'
 import type { ArchIR } from '../App'
-import { irToFlow, flowToIR } from '../utils/irToFlow'
+import { irToFlow, flowToIR, LINE_STYLES_DARK, LINE_STYLES_LIGHT } from '../utils/irToFlow'
+import type { DiagramTheme } from '../utils/irToFlow'
 import InfraNode from './nodes/InfraNode'
 import GroupNode from './nodes/GroupNode'
 
@@ -19,16 +22,35 @@ interface Props {
   onIrChange: (ir: ArchIR) => void
   diagramId: string | null
   onSearchIcon?: (nodeId: string, nodeType: string, label: string) => void
+  theme: DiagramTheme
+  onToggleTheme: () => void
 }
 
 const API_BASE = ''
 
-export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon }: Props) {
+const ARROW_OPTIONS = [
+  { value: 'forward',  label: '→',  title: '정방향' },
+  { value: 'backward', label: '←',  title: '역방향' },
+  { value: 'both',     label: '↔',  title: '양방향' },
+  { value: 'none',     label: '─',  title: '화살표 없음' },
+]
+
+const LINE_TYPE_OPTIONS = [
+  { value: 'general', label: '일반',   color: '#94a3b8' },
+  { value: 'data',    label: '데이터', color: '#a78bfa' },
+  { value: 'alert',   label: '경고',   color: '#f87171' },
+  { value: 'blue',    label: '파랑',   color: '#60a5fa' },
+  { value: 'lb',      label: 'LB',     color: '#94a3b8' },
+  { value: 'vpc',     label: 'VPC',    color: '#cbd5e1' },
+]
+
+export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon, theme, onToggleTheme }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const skipIrToFlowRef = useRef(false)
+  // React Flow의 edge.selected를 직접 사용 (onEdgeClick 대신)
+  const selectedEdge = edges.find(e => e.selected) ?? null
 
-  // onSearchIcon을 InfraNode에 주입
   const nodeTypes = useMemo(() => ({
     infraNode: (props: any) => (
       <InfraNode {...props} data={{ ...props.data, onSearchIcon }} />
@@ -38,19 +60,77 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon 
 
   useEffect(() => {
     if (!ir) return
-    // 드래그로 인한 IR 변경 시 irToFlow 재실행 방지
-    // (auto-fit이 그룹 크기/위치를 다시 계산해 그룹이 점프하는 문제)
     if (skipIrToFlowRef.current) {
       skipIrToFlowRef.current = false
       return
     }
-    const { nodes: newNodes, edges: newEdges } = irToFlow(ir)
+    const { nodes: newNodes, edges: newEdges } = irToFlow(ir, theme)
     setNodes(newNodes)
     setEdges(newEdges)
-  }, [ir])
+  }, [ir, theme])
+
+  const getLineStyles = useCallback(() =>
+    theme === 'dark' ? LINE_STYLES_DARK : LINE_STYLES_LIGHT,
+  [theme])
+
+  const buildMarkers = (arrow: string, color: string) => ({
+    markerEnd: (arrow === 'forward' || arrow === 'both')
+      ? { type: MarkerType.ArrowClosed, color, width: 16, height: 16 } : undefined,
+    markerStart: (arrow === 'backward' || arrow === 'both')
+      ? { type: MarkerType.ArrowClosed, color, width: 16, height: 16 } : undefined,
+  })
 
   const onConnect = useCallback(
-    (connection: Connection) => setEdges(eds => addEdge(connection, eds)),
+    (connection: Connection) => {
+      const ls = getLineStyles().general
+      const newEdge = {
+        ...connection,
+        ...buildMarkers('forward', ls.stroke),
+        style: ls,
+        data: { line_type: 'general', arrow: 'forward' },
+      }
+      setEdges(eds => addEdge(newEdge, eds))
+    },
+    [setEdges, getLineStyles],
+  )
+
+  const handleArrowChange = useCallback((arrow: string) => {
+    setEdges(eds => {
+      const sel = eds.find(e => e.selected)
+      if (!sel) return eds
+      return eds.map(e => {
+        if (e.id !== sel.id) return e
+        const color = (e.style as any)?.stroke || '#94a3b8'
+        const markers = buildMarkers(arrow, color)
+        return { ...e, markerEnd: markers.markerEnd, markerStart: markers.markerStart, style: { ...(e.style as any) }, data: { ...e.data, arrow, _ts: Date.now() } }
+      })
+    })
+  }, [setEdges])
+
+  const handleLineTypeChange = useCallback((lineType: string) => {
+    setEdges(eds => {
+      const sel = eds.find(e => e.selected)
+      if (!sel) return eds
+      const ls = getLineStyles()[lineType] || getLineStyles().general
+      const arrow = sel.data?.arrow || 'forward'
+      return eds.map(e => {
+        if (e.id !== sel.id) return e
+        return {
+          ...e,
+          style: ls,
+          animated: lineType === 'data',
+          ...buildMarkers(arrow, ls.stroke),
+          data: { ...e.data, line_type: lineType },
+        }
+      })
+    })
+  }, [setEdges, getLineStyles])
+
+  const onEdgeUpdate = useCallback(
+    (oldEdge: Edge, newConnection: Connection) => {
+      skipIrToFlowRef.current = true
+      setEdges(eds => updateEdge(oldEdge, newConnection, eds))
+    },
     [setEdges],
   )
 
@@ -89,11 +169,11 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon 
     if (!el) return
     try {
       const { toPng } = await import('html-to-image')
+      const bgColor = theme === 'dark' ? '#0a0a0f' : '#f8fafc'
       const dataUrl = await toPng(el, {
         quality: 0.95,
-        backgroundColor: '#0a0a0f',
+        backgroundColor: bgColor,
         pixelRatio: 2,
-        // 크로스오리진 이미지(Iconify) 로드 실패 시 건너뜀 (Safari 대응)
         filter: (node) => {
           if (node instanceof HTMLElement && node.tagName === 'IMG') {
             const img = node as HTMLImageElement
@@ -106,7 +186,6 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon 
       const a = document.createElement('a')
       a.download = filename
       a.href = dataUrl
-      // Safari는 body append 없이 a.click()이 동작하지 않음
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -120,7 +199,7 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon 
     return (
       <div className="canvas-empty">
         <div className="empty-message">
-          <div className="empty-arch-icon">🏗️</div>
+          <div className="empty-arch-icon">&#x1f3d7;&#xfe0f;</div>
           <h2>ArchGen</h2>
           <p>
             왼쪽 패널에서 인프라 구조를 설명하면<br />
@@ -128,14 +207,16 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon 
             아키텍처 다이어그램을 생성합니다
           </p>
           <div className="empty-tips">
-            <span className="empty-tip">✦ AWS / Azure / GCP 아이콘 자동 매핑</span>
-            <span className="empty-tip">✦ 데이터 흐름 순서 자동 분석</span>
-            <span className="empty-tip">✦ 누락 아이콘 클릭으로 웹 검색</span>
+            <span className="empty-tip">&#x2726; AWS / Azure / GCP 아이콘 자동 매핑</span>
+            <span className="empty-tip">&#x2726; 데이터 흐름 순서 자동 분석</span>
+            <span className="empty-tip">&#x2726; 누락 아이콘 클릭으로 웹 검색</span>
           </div>
         </div>
       </div>
     )
   }
+
+  const isDark = theme === 'dark'
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -145,6 +226,7 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon 
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onEdgeUpdate={onEdgeUpdate}
         onNodeDragStop={onNodeDragStop}
         nodeTypes={nodeTypes}
         fitView
@@ -153,16 +235,53 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon 
         minZoom={0.2}
         maxZoom={2}
       >
-        <Background color="#1a1a2e" gap={20} size={1} />
+        <Background color={isDark ? '#1a1a2e' : '#e2e8f0'} gap={20} size={1} />
         <Controls />
         <MiniMap
-          nodeColor="#4a5568"
-          maskColor="rgba(10,10,15,0.7)"
+          nodeColor={isDark ? '#4a5568' : '#94a3b8'}
+          maskColor={isDark ? 'rgba(10,10,15,0.7)' : 'rgba(248,250,252,0.7)'}
         />
       </ReactFlow>
+      {selectedEdge && (() => {
+        const curArrow = selectedEdge?.data?.arrow || 'forward'
+        const curLine = selectedEdge?.data?.line_type || 'general'
+        return (
+          <div className="edge-toolbar" onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+            <div className="edge-toolbar-group">
+              {ARROW_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  title={opt.title}
+                  className={`edge-toolbar-btn${curArrow === opt.value ? ' active' : ''}`}
+                  onClick={() => handleArrowChange(opt.value)}
+                >{opt.label}</button>
+              ))}
+            </div>
+            <div className="edge-toolbar-divider" />
+            <div className="edge-toolbar-group">
+              {LINE_TYPE_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  title={opt.label}
+                  className={`edge-toolbar-btn edge-toolbar-color${curLine === opt.value ? ' active' : ''}`}
+                  onClick={() => handleLineTypeChange(opt.value)}
+                >
+                  <span className="edge-color-dot" style={{ background: opt.color }} />
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <button className="edge-toolbar-close" onClick={() => setEdges(eds => eds.map(e => ({ ...e, selected: false })))}>✕</button>
+          </div>
+        )
+      })()}
+
       <div className="canvas-toolbar">
         <button onClick={handleSave} className="btn-primary">저장</button>
         <button onClick={handleExportPng} className="btn-secondary">PNG</button>
+        <button onClick={onToggleTheme} className="btn-secondary btn-theme">
+          {isDark ? 'Light' : 'Dark'}
+        </button>
       </div>
     </div>
   )

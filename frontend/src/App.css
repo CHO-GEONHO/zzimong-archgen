@@ -191,6 +191,56 @@ body::before {
 }
 .empty-message p { font-size: 13px; line-height: 1.8; color: rgba(255,255,255,0.25); }
 
+/* ── 엣지 클릭 히트 영역 확장 (투명한 넓은 패스로 클릭 쉽게) ── */
+.react-flow__edge-interaction { stroke-width: 24 !important; }
+.react-flow__edge:hover .react-flow__edge-path { opacity: 0.85; }
+.react-flow__edge.selected .react-flow__edge-path {
+  filter: drop-shadow(0 0 4px rgba(167,139,250,0.7));
+}
+
+/* ── 엣지 선택 툴바 ── */
+.edge-toolbar {
+  position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 6px; z-index: 20;
+  background: rgba(10,10,15,0.92); backdrop-filter: blur(16px);
+  padding: 6px 10px; border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  animation: toolbar-in 0.15s ease;
+}
+@keyframes toolbar-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.edge-toolbar-group { display: flex; gap: 4px; }
+.edge-toolbar-divider { width: 1px; background: rgba(255,255,255,0.12); margin: 0 2px; align-self: stretch; }
+.edge-toolbar-btn {
+  padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 500;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.6); cursor: pointer; transition: all 0.12s;
+  display: flex; align-items: center; gap: 4px; white-space: nowrap;
+}
+.edge-toolbar-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.edge-toolbar-btn.active { background: rgba(167,139,250,0.25); border-color: rgba(167,139,250,0.6); color: #a78bfa; }
+.edge-color-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.edge-toolbar-close {
+  padding: 3px 7px; border-radius: 6px; font-size: 11px;
+  background: transparent; border: none; color: rgba(255,255,255,0.3);
+  cursor: pointer; margin-left: 2px;
+}
+.edge-toolbar-close:hover { color: rgba(255,255,255,0.7); }
+/* 라이트 테마 */
+.app-light .edge-toolbar {
+  background: rgba(255,255,255,0.95);
+  border-color: rgba(0,0,0,0.1);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+}
+.app-light .edge-toolbar-btn { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); color: #475569; }
+.app-light .edge-toolbar-btn:hover { background: rgba(0,0,0,0.08); color: #1e293b; }
+.app-light .edge-toolbar-btn.active { background: rgba(124,58,237,0.1); border-color: rgba(124,58,237,0.4); color: #7c3aed; }
+.app-light .edge-toolbar-divider { background: rgba(0,0,0,0.1); }
+.app-light .edge-toolbar-close { color: rgba(0,0,0,0.3); }
+
 .canvas-toolbar {
   position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
   display: flex; gap: 8px; z-index: 10;
@@ -311,6 +361,11 @@ body::before {
 .node-badge.ip   { background: rgba(99,179,237,0.15); color: #90cdf4; border: 1px solid rgba(99,179,237,0.2); }
 .node-badge.port { background: rgba(110,231,183,0.1); color: #6ee7b7; border: 1px solid rgba(110,231,183,0.2); }
 .node-tag.spot { position: absolute; top: -8px; right: -8px; background: #d97706; color: white; font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
+
+/* 그룹 노드 배경은 클릭 통과 — 헤더만 상호작용 */
+.react-flow__node-groupNode { pointer-events: none !important; }
+.react-flow__node-groupNode .group-node-header { pointer-events: auto; cursor: grab; }
+.react-flow__node-groupNode .group-node-header:active { cursor: grabbing; }
 
 .group-node-header { display: flex; align-items: center; gap: 6px; padding: 6px 10px; }
 .group-cloud-indicator { width: 8px; height: 8px; border-radius: 50%; }

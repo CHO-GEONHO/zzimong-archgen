@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import type { DiagramTheme } from './utils/irToFlow'
 import { ReactFlowProvider } from 'reactflow'
 import { Toaster } from 'react-hot-toast'
 import DiagramEditor from './components/DiagramEditor'
@@ -39,6 +40,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false)
   const [mobileTab, setMobileTab] = useState<MobileTab>('input')
   const [iconSearch, setIconSearch] = useState<IconSearchState | null>(null)
+  const [theme, setTheme] = useState<DiagramTheme>('dark')
 
   const handleParsed = (newIr: ArchIR, id?: string) => {
     setIr(newIr)
@@ -66,7 +68,7 @@ export default function App() {
   }, [ir])
 
   return (
-    <div className="app-container">
+    <div className={`app-container${theme === 'light' ? ' app-light' : ''}`}>
       <Toaster
         position="top-right"
         toastOptions={{
@@ -99,6 +101,8 @@ export default function App() {
               onIrChange={setIr}
               diagramId={diagramId}
               onSearchIcon={handleSearchIcon}
+              theme={theme}
+              onToggleTheme={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
             />
           </ReactFlowProvider>
           {/* 데이터 플로우 패널 (캔버스 하단) */}
