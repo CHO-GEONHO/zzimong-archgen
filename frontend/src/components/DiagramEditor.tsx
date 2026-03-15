@@ -215,36 +215,28 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
   }
 
   const handleExportPng = async () => {
-    const flowEl = document.querySelector('.react-flow') as HTMLElement
-    if (!flowEl || getNodes().length === 0) return
+    // canvas-container는 light 모드일 때 이미 canvas-light 클래스를 가짐
+    // → CSS 규칙(.canvas-light .infra-node 등)이 올바르게 적용된 상태로 캡처 가능
+    const captureEl = document.querySelector('.canvas-container') as HTMLElement
+    if (!captureEl || getNodes().length === 0) return
 
     try {
       const { toPng } = await import('html-to-image')
 
-      // 전체 노드+엣지가 보이도록 즉시 fitView
       fitView({ padding: 0.06, duration: 0 })
-
-      // DOM 업데이트 대기 (2프레임)
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
 
       const bgColor = theme === 'dark' ? '#0a0a0f' : '#f8fafc'
 
-      // html-to-image는 캡처 대상 밖의 상위 클래스(.canvas-light)를 인식 못함
-      // → light 테마일 때 .react-flow에 직접 canvas-light 임시 적용
-      const isLight = theme === 'light'
-      if (isLight) flowEl.classList.add('canvas-light')
-
-      const dataUrl = await toPng(flowEl, {
+      const dataUrl = await toPng(captureEl, {
         backgroundColor: bgColor,
         pixelRatio: 2,
         filter: (node) => {
           if (!(node instanceof HTMLElement)) return true
-          // UI 요소 제외 (미니맵, 컨트롤, 툴바)
           if (node.classList.contains('react-flow__minimap')) return false
           if (node.classList.contains('react-flow__controls')) return false
           if (node.classList.contains('canvas-toolbar')) return false
           if (node.classList.contains('edge-toolbar')) return false
-          // 로딩 안 된 이미지 제외
           if (node.tagName === 'IMG') {
             const img = node as HTMLImageElement
             if (!img.complete || img.naturalWidth === 0) return false
@@ -263,8 +255,6 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
       toast.success('PNG 저장됨')
     } catch {
       toast.error('PNG 내보내기 실패')
-    } finally {
-      if (theme === 'light') flowEl.classList.remove('canvas-light')
     }
   }
 
