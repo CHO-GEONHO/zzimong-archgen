@@ -1,7 +1,7 @@
 /**
  * JSON IR ↔ React Flow 변환 유틸리티 (v2 — Iconify CDN 지원)
  */
-import { MarkerType } from "reactflow"
+import type {} from "reactflow"
 import type { Node, Edge } from "reactflow"
 import type { ArchIR } from "../App"
 
@@ -267,22 +267,22 @@ export function irToFlow(ir: ArchIR, theme: DiagramTheme = 'dark'): { nodes: Nod
   }
 
   // 핸들 방향이 정반대면 bezier, 아니면 smoothstep(ㄷ자 라운드)
-  function getEdgeType(sh: string, th: string): string {
+  function getRouting(sh: string, th: string): 'bezier' | 'smoothstep' {
     const srcDir = sh.replace(/-[st]$/, '')
     const tgtDir = th.replace(/-[st]$/, '')
-    return OPPOSITE[srcDir] === tgtDir ? 'default' : 'smoothstep'
+    return OPPOSITE[srcDir] === tgtDir ? 'bezier' : 'smoothstep'
   }
 
-  // 엣지
+  // 엣지 — 커스텀 ArrowEdge 타입으로 통일 (마커는 컴포넌트에서 data.arrow 기반으로 렌더)
   for (const edge of ir.edges) {
     const ls = lineStyles[edge.line_type || 'general'] || lineStyles.general
     const handles = edge.sourceHandle && edge.targetHandle
       ? { sourceHandle: edge.sourceHandle, targetHandle: edge.targetHandle }
       : getBestHandles(edge.from, edge.to)
-    const edgeType = getEdgeType(handles.sourceHandle, handles.targetHandle)
+    const routing = getRouting(handles.sourceHandle, handles.targetHandle)
     edges.push({
       id: edge.id,
-      type: edgeType,
+      type: 'arrowEdge',
       source: edge.from,
       target: edge.to,
       sourceHandle: handles.sourceHandle,
@@ -293,19 +293,11 @@ export function irToFlow(ir: ArchIR, theme: DiagramTheme = 'dark'): { nodes: Nod
       labelBgPadding: [4, 8] as [number, number],
       labelBgBorderRadius: 4,
       animated: edge.line_type === 'data',
-      markerEnd: (edge.arrow || 'forward') !== 'backward' ? {
-        type: MarkerType.ArrowClosed,
-        color: ls.stroke,
-        width: 16,
-        height: 16,
-      } : undefined,
-      markerStart: (edge.arrow === 'both' || edge.arrow === 'backward') ? {
-        type: MarkerType.ArrowClosed,
-        color: ls.stroke,
-        width: 16,
-        height: 16,
-      } : undefined,
-      data: { line_type: edge.line_type },
+      data: {
+        line_type: edge.line_type,
+        arrow: edge.arrow || 'forward',
+        routing,
+      },
     })
   }
 

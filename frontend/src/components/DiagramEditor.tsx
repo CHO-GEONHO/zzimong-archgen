@@ -4,7 +4,6 @@ import ReactFlow, {
   Background,
   Controls,
   MiniMap,
-  MarkerType,
   useNodesState,
   useEdgesState,
   addEdge,
@@ -16,6 +15,7 @@ import { irToFlow, flowToIR, LINE_STYLES_DARK, LINE_STYLES_LIGHT } from '../util
 import type { DiagramTheme } from '../utils/irToFlow'
 import InfraNode from './nodes/InfraNode'
 import GroupNode from './nodes/GroupNode'
+import ArrowEdge from './edges/ArrowEdge'
 
 interface Props {
   ir: ArchIR | null
@@ -58,6 +58,8 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
     groupNode: GroupNode,
   }), [onSearchIcon])
 
+  const edgeTypes = useMemo(() => ({ arrowEdge: ArrowEdge }), [])
+
   useEffect(() => {
     if (!ir) return
     if (skipIrToFlowRef.current) {
@@ -73,37 +75,27 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
     theme === 'dark' ? LINE_STYLES_DARK : LINE_STYLES_LIGHT,
   [theme])
 
-  const buildMarkers = (arrow: string, color: string) => ({
-    markerEnd: (arrow === 'forward' || arrow === 'both')
-      ? { type: MarkerType.ArrowClosed, color, width: 16, height: 16 } : undefined,
-    markerStart: (arrow === 'backward' || arrow === 'both')
-      ? { type: MarkerType.ArrowClosed, color, width: 16, height: 16 } : undefined,
-  })
-
   const onConnect = useCallback(
     (connection: Connection) => {
       const ls = getLineStyles().general
-      const newEdge = {
+      setEdges(eds => addEdge({
         ...connection,
-        ...buildMarkers('forward', ls.stroke),
+        type: 'arrowEdge',
         style: ls,
-        data: { line_type: 'general', arrow: 'forward' },
-      }
-      setEdges(eds => addEdge(newEdge, eds))
+        data: { line_type: 'general', arrow: 'forward', routing: 'bezier' },
+      }, eds))
     },
     [setEdges, getLineStyles],
   )
 
+  // data.arrow만 업데이트 — ArrowEdge 컴포넌트가 직접 읽어서 렌더
   const handleArrowChange = useCallback((arrow: string) => {
     setEdges(eds => {
       const sel = eds.find(e => e.selected)
       if (!sel) return eds
-      return eds.map(e => {
-        if (e.id !== sel.id) return e
-        const color = (e.style as any)?.stroke || '#94a3b8'
-        const markers = buildMarkers(arrow, color)
-        return { ...e, markerEnd: markers.markerEnd, markerStart: markers.markerStart, style: { ...(e.style as any) }, data: { ...e.data, arrow, _ts: Date.now() } }
-      })
+      return eds.map(e =>
+        e.id === sel.id ? { ...e, data: { ...e.data, arrow } } : e
+      )
     })
   }, [setEdges])
 
@@ -112,17 +104,11 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
       const sel = eds.find(e => e.selected)
       if (!sel) return eds
       const ls = getLineStyles()[lineType] || getLineStyles().general
-      const arrow = sel.data?.arrow || 'forward'
-      return eds.map(e => {
-        if (e.id !== sel.id) return e
-        return {
-          ...e,
-          style: ls,
-          animated: lineType === 'data',
-          ...buildMarkers(arrow, ls.stroke),
-          data: { ...e.data, line_type: lineType },
-        }
-      })
+      return eds.map(e =>
+        e.id === sel.id
+          ? { ...e, style: ls, animated: lineType === 'data', data: { ...e.data, line_type: lineType } }
+          : e
+      )
     })
   }, [setEdges, getLineStyles])
 
@@ -229,6 +215,7 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
         onEdgeUpdate={onEdgeUpdate}
         onNodeDragStop={onNodeDragStop}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         fitView
         fitViewOptions={{ padding: 0.15 }}
         deleteKeyCode="Delete"
