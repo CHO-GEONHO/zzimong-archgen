@@ -49,7 +49,7 @@ export const LINE_STYLES_LIGHT: Record<string, any> = {
 }
 
 // 테마별 엣지 라벨 스타일
-const LABEL_STYLES = {
+export const LABEL_STYLES = {
   dark: {
     labelStyle: { fill: '#e2e8f0', fontSize: 11, fontWeight: 500 },
     labelBgStyle: { fill: 'rgba(15,16,25,0.85)', stroke: 'rgba(255,255,255,0.08)' },
@@ -238,7 +238,7 @@ export function irToFlow(ir: ArchIR, theme: DiagramTheme = 'dark'): { nodes: Nod
     groupSizes.set(group.id, { width: w, height: h })
 
     const bgOpacity = theme === 'light'
-      ? Math.min((group.bg_opacity || 0.06) * 1.5, 0.12)
+      ? Math.min((group.bg_opacity || 0.06) * 4, 0.22)
       : (group.bg_opacity || 0.06)
 
     nodes.push({
@@ -249,7 +249,7 @@ export function irToFlow(ir: ArchIR, theme: DiagramTheme = 'dark'): { nodes: Nod
         width: w,
         height: h,
         background: `${group.color || '#888888'}${Math.round(bgOpacity * 255).toString(16).padStart(2, '0')}`,
-        border: `1.5px solid ${group.color || '#888888'}${theme === 'light' ? '44' : '66'}`,
+        border: `2px solid ${group.color || '#888888'}${theme === 'light' ? 'bb' : '66'}`,
         borderRadius: 16,
       },
       data: {
@@ -402,6 +402,39 @@ export function irToFlow(ir: ArchIR, theme: DiagramTheme = 'dark'): { nodes: Nod
     return OPPOSITE[srcDir] === tgtDir ? 'bezier' : 'smoothstep'
   }
 
+  // ── 8) 반대방향 엣지 쌍 탐지 → 라벨 오프셋 자동 분리 ──
+  // 정규화 키: "작은id|큰id" 로 양방향 쌍을 하나로 묶음
+  const pairKey = (a: string, b: string) => [a, b].sort().join('|')
+  const edgePairs = new Map<string, string[]>() // key → [edgeId, ...]
+  for (const edge of ir.edges) {
+    const key = pairKey(edge.from, edge.to)
+    if (!edgePairs.has(key)) edgePairs.set(key, [])
+    edgePairs.get(key)!.push(edge.id)
+  }
+
+  // 쌍이 2개 이상인 엣지에 대해 수직 방향 오프셋 계산
+  const LABEL_OFFSET = 32
+  const labelAutoOffset = new Map<string, { x: number; y: number }>()
+
+  for (const [, ids] of edgePairs) {
+    if (ids.length < 2) continue
+    // 첫 엣지 기준으로 방향 계산
+    const firstEdge = ir.edges.find(e => e.id === ids[0])!
+    const handles = getBestHandles(firstEdge.from, firstEdge.to)
+    const srcDir = handles.sourceHandle.replace(/-[st]$/, '')
+
+    // 수평 엣지(left/right): 라벨을 Y축으로 분리
+    // 수직 엣지(top/bottom): 라벨을 X축으로 분리
+    const isHorizontal = srcDir === 'left' || srcDir === 'right'
+    ids.forEach((id, i) => {
+      const sign = i % 2 === 0 ? -1 : 1
+      labelAutoOffset.set(id, {
+        x: isHorizontal ? 0 : sign * LABEL_OFFSET,
+        y: isHorizontal ? sign * LABEL_OFFSET : 0,
+      })
+    })
+  }
+
   // 엣지 — 커스텀 ArrowEdge 타입으로 통일 (마커는 컴포넌트에서 data.arrow 기반으로 렌더)
   for (const edge of ir.edges) {
     const ls = lineStyles[edge.line_type || 'general'] || lineStyles.general
@@ -409,6 +442,7 @@ export function irToFlow(ir: ArchIR, theme: DiagramTheme = 'dark'): { nodes: Nod
       ? { sourceHandle: edge.sourceHandle, targetHandle: edge.targetHandle }
       : getBestHandles(edge.from, edge.to)
     const routing = getRouting(handles.sourceHandle, handles.targetHandle)
+    const autoOff = labelAutoOffset.get(edge.id) || { x: 0, y: 0 }
     edges.push({
       id: edge.id,
       type: 'arrowEdge',
@@ -426,8 +460,8 @@ export function irToFlow(ir: ArchIR, theme: DiagramTheme = 'dark'): { nodes: Nod
         line_type: edge.line_type,
         arrow: edge.arrow || 'forward',
         routing,
-        labelOffsetX: edge.label_offset_x ?? 0,
-        labelOffsetY: edge.label_offset_y ?? 0,
+        labelOffsetX: (edge.label_offset_x ?? 0) + autoOff.x,
+        labelOffsetY: (edge.label_offset_y ?? 0) + autoOff.y,
       },
     })
   }

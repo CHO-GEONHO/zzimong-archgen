@@ -39,15 +39,23 @@ export default function InfraNode({ data }: { data: InfraNodeData }) {
             <Handle type="source" position={pos} id={`${id}-s`} className="node-handle" />
           </React.Fragment>
         ))}
-        {hasIcon ? (
-          <img src={data.iconUrl!} className="node-icon-large" width={48} height={48}
-            onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
-          />
-        ) : (
-          <div className="node-icon-placeholder" style={{ width: 48, height: 48, fontSize: 20 }}>
-            {data.nodeType?.[0]?.toUpperCase() || '?'}
-          </div>
-        )}
+        <div
+          className="node-icon-wrap node-icon-clickable"
+          style={{ width: 48, height: 48 }}
+          title="클릭하여 아이콘 변경"
+          onClick={e => { e.stopPropagation(); data.onSearchIcon?.(data.nodeId || '', data.nodeType || '', data.label) }}
+        >
+          {hasIcon ? (
+            <img src={data.iconUrl!} className="node-icon-large" width={48} height={48}
+              onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+            />
+          ) : (
+            <div className="node-icon-placeholder" style={{ width: 48, height: 48, fontSize: 20 }}>
+              {data.nodeType?.[0]?.toUpperCase() || '?'}
+            </div>
+          )}
+          <div className="node-icon-edit-overlay">✎</div>
+        </div>
         <span className="icon-only-label">{truncate(data.label, 14)}</span>
       </div>
     )
@@ -67,7 +75,7 @@ export default function InfraNode({ data }: { data: InfraNodeData }) {
         {hasIcon ? (
           <div
             className="node-icon-wrap node-icon-clickable"
-            title={`${data.iconKey || ''}\n클릭하여 아이콘 변경`}
+            title="클릭하여 아이콘 변경"
             onClick={e => { e.stopPropagation(); data.onSearchIcon?.(data.nodeId || '', data.nodeType || '', data.label) }}
           >
             <img
@@ -85,7 +93,7 @@ export default function InfraNode({ data }: { data: InfraNodeData }) {
             <div className="node-icon-placeholder" style={{ display: 'none' }}>
               {data.nodeType?.[0]?.toUpperCase() || '?'}
             </div>
-            <div className="node-icon-edit-hint">✎</div>
+            <div className="node-icon-edit-overlay">✎</div>
           </div>
         ) : (
           <div

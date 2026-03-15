@@ -6,12 +6,14 @@ import ReactFlow, {
   MiniMap,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   addEdge,
   updateEdge,
+  ConnectionMode,
 } from 'reactflow'
 import toast from 'react-hot-toast'
 import type { ArchIR } from '../App'
-import { irToFlow, flowToIR, LINE_STYLES_DARK, LINE_STYLES_LIGHT } from '../utils/irToFlow'
+import { irToFlow, flowToIR, LINE_STYLES_DARK, LINE_STYLES_LIGHT, LABEL_STYLES, resolveIconUrl } from '../utils/irToFlow'
 import type { DiagramTheme } from '../utils/irToFlow'
 import InfraNode from './nodes/InfraNode'
 import GroupNode from './nodes/GroupNode'
@@ -51,6 +53,7 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const [iconOnly, setIconOnly] = useState(false)
+  const { getNodes, fitView } = useReactFlow()
   const skipIrToFlowRef = useRef(false)
   // React Flow의 edge.selected를 직접 사용 (onEdgeClick 대신)
   const selectedEdge = edges.find(e => e.selected) ?? null
@@ -67,6 +70,7 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
 
   const edgeTypes = useMemo(() => ({ arrowEdge: ArrowEdge }), [])
 
+  // IR 변경 시 전체 재생성 (theme 제외 — 수동 엣지 보존 위해)
   useEffect(() => {
     if (!ir) return
     if (skipIrToFlowRef.current) {
@@ -76,7 +80,44 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
     const { nodes: newNodes, edges: newEdges } = irToFlow(ir, theme)
     setNodes(newNodes)
     setEdges(newEdges)
-  }, [ir, theme])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ir])
+
+  // 테마 변경 시 스타일만 업데이트 (수동 엣지 유지)
+  useEffect(() => {
+    if (!ir) return
+    const lineStyles = theme === 'dark' ? LINE_STYLES_DARK : LINE_STYLES_LIGHT
+    const lStyle = LABEL_STYLES[theme]
+
+    setNodes(nds => nds.map(n => {
+      if (n.type === 'infraNode') {
+        return { ...n, data: { ...n.data, iconUrl: resolveIconUrl(n.data.iconKey, theme), theme } }
+      }
+      if (n.type === 'groupNode') {
+        const irGroup = ir.groups.find((g: any) => g.id === n.id)
+        if (irGroup) {
+          const bgOpacity = theme === 'light'
+            ? Math.min((irGroup.bg_opacity || 0.06) * 4, 0.22)
+            : (irGroup.bg_opacity || 0.06)
+          return {
+            ...n,
+            style: {
+              ...n.style,
+              background: `${irGroup.color || '#888888'}${Math.round(bgOpacity * 255).toString(16).padStart(2, '0')}`,
+              border: `2px solid ${irGroup.color || '#888888'}${theme === 'light' ? 'bb' : '66'}`,
+            },
+          }
+        }
+      }
+      return n
+    }))
+
+    setEdges(eds => eds.map(e => {
+      const lineType = e.data?.line_type || 'general'
+      const ls = lineStyles[lineType] || lineStyles.general
+      return { ...e, style: ls, ...lStyle }
+    }))
+  }, [theme])
 
   const getLineStyles = useCallback(() =>
     theme === 'dark' ? LINE_STYLES_DARK : LINE_STYLES_LIGHT,
@@ -174,23 +215,44 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
   }
 
   const handleExportPng = async () => {
-    const el = document.querySelector('.react-flow') as HTMLElement
-    if (!el) return
+    const flowEl = document.querySelector('.react-flow') as HTMLElement
+    if (!flowEl || getNodes().length === 0) return
+
     try {
       const { toPng } = await import('html-to-image')
+
+      // 전체 노드+엣지가 보이도록 즉시 fitView
+      fitView({ padding: 0.06, duration: 0 })
+
+      // DOM 업데이트 대기 (2프레임)
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+
       const bgColor = theme === 'dark' ? '#0a0a0f' : '#f8fafc'
-      const dataUrl = await toPng(el, {
-        quality: 0.95,
+
+      // html-to-image는 캡처 대상 밖의 상위 클래스(.canvas-light)를 인식 못함
+      // → light 테마일 때 .react-flow에 직접 canvas-light 임시 적용
+      const isLight = theme === 'light'
+      if (isLight) flowEl.classList.add('canvas-light')
+
+      const dataUrl = await toPng(flowEl, {
         backgroundColor: bgColor,
         pixelRatio: 2,
         filter: (node) => {
-          if (node instanceof HTMLElement && node.tagName === 'IMG') {
+          if (!(node instanceof HTMLElement)) return true
+          // UI 요소 제외 (미니맵, 컨트롤, 툴바)
+          if (node.classList.contains('react-flow__minimap')) return false
+          if (node.classList.contains('react-flow__controls')) return false
+          if (node.classList.contains('canvas-toolbar')) return false
+          if (node.classList.contains('edge-toolbar')) return false
+          // 로딩 안 된 이미지 제외
+          if (node.tagName === 'IMG') {
             const img = node as HTMLImageElement
             if (!img.complete || img.naturalWidth === 0) return false
           }
           return true
         },
       })
+
       const filename = `${ir?.meta?.title || 'diagram'}.png`
       const a = document.createElement('a')
       a.download = filename
@@ -201,6 +263,8 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
       toast.success('PNG 저장됨')
     } catch {
       toast.error('PNG 내보내기 실패')
+    } finally {
+      if (theme === 'light') flowEl.classList.remove('canvas-light')
     }
   }
 
@@ -242,11 +306,12 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
         edgeTypes={edgeTypes}
         fitView
         fitViewOptions={{ padding: 0.15 }}
+        connectionMode={ConnectionMode.Loose}
         deleteKeyCode="Delete"
         minZoom={0.2}
         maxZoom={2}
       >
-        <Background color={isDark ? '#1a1a2e' : '#e2e8f0'} gap={20} size={1} />
+        <Background color={isDark ? '#1a1a2e' : '#94a3b8'} gap={20} size={1} />
         <Controls />
         <MiniMap
           nodeColor={isDark ? '#4a5568' : '#94a3b8'}
