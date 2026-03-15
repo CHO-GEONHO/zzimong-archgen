@@ -33,6 +33,7 @@ export default function ArrowEdge(props: EdgeProps) {
         </marker>
       </defs>
       <BaseEdge
+        key={`${id}-${arrow}`}
         id={id}
         path={edgePath}
         style={style}
