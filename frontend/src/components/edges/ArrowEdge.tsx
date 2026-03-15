@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react'
-import { getBezierPath, getSmoothStepPath, BaseEdge, Position, EdgeLabelRenderer, useStore } from 'reactflow'
+import { getBezierPath, getSmoothStepPath, getStraightPath, BaseEdge, Position, EdgeLabelRenderer, useStore } from 'reactflow'
 import type { EdgeProps } from 'reactflow'
 
 // Context: DiagramEditor가 provide, ArrowEdge가 consume
@@ -53,6 +53,8 @@ export default function ArrowEdge(props: EdgeProps) {
 
   const [edgePath, labelX, labelY] = routing === 'smoothstep'
     ? getSmoothStepPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition })
+    : routing === 'straight'
+    ? getStraightPath({ sourceX, sourceY, targetX, targetY })
     : getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition })
 
   const showEnd   = arrow === 'forward'  || arrow === 'both'

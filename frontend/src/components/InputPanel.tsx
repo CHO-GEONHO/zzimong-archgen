@@ -6,6 +6,13 @@ import type { ArchIR } from "../App"
 const API_BASE = ''
 
 type InputTab = 'text' | 'cli' | 'git'
+type DiagramType = 'architecture' | 'sequence' | 'flowchart'
+
+const DIAGRAM_TYPES: { value: DiagramType; label: string; hint: string }[] = [
+  { value: 'architecture', label: '🏗 아키텍처', hint: '인프라 구성요소와 연결 관계' },
+  { value: 'sequence',     label: '🔄 시퀀스',   hint: '시스템 간 메시지 흐름 순서' },
+  { value: 'flowchart',    label: '🔀 플로우',   hint: '의사결정 흐름, 프로세스 단계' },
+]
 
 const CLI_HINTS: Record<string, string[]> = {
   azure: [
@@ -37,6 +44,7 @@ interface Props {
 
 export default function InputPanel({ onParsed, isLoading, setIsLoading }: Props) {
   const [tab, setTab] = useState<InputTab>('text')
+  const [diagramType, setDiagramType] = useState<DiagramType>('architecture')
   const [textInput, setTextInput] = useState('')
   const [cliOutput, setCliOutput] = useState('')
   const [gitUrl, setGitUrl] = useState('')
@@ -50,7 +58,7 @@ export default function InputPanel({ onParsed, isLoading, setIsLoading }: Props)
       const resp = await fetch(`${API_BASE}/api/parse/text`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: textInput }),
+        body: JSON.stringify({ text: textInput, diagram_type: diagramType }),
       })
       const data = await resp.json()
       if (data.ir) {
@@ -124,7 +132,22 @@ export default function InputPanel({ onParsed, isLoading, setIsLoading }: Props)
       {/* 텍스트 탭 */}
       {tab === 'text' && (
         <div className="tab-content">
-          <p className="hint">인프라 구조를 자유롭게 설명하세요</p>
+          {/* 다이어그램 타입 선택 */}
+          <div className="diagram-type-selector">
+            {DIAGRAM_TYPES.map(dt => (
+              <button
+                key={dt.value}
+                className={`diagram-type-btn${diagramType === dt.value ? ' active' : ''}`}
+                onClick={() => setDiagramType(dt.value)}
+                title={dt.hint}
+              >
+                {dt.label}
+              </button>
+            ))}
+          </div>
+          <p className="hint">
+            {DIAGRAM_TYPES.find(d => d.value === diagramType)?.hint}
+          </p>
           <textarea
             value={textInput}
             onChange={e => setTextInput(e.target.value)}

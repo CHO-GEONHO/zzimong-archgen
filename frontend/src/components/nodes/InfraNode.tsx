@@ -12,6 +12,7 @@ interface InfraNodeData {
   nodeType?: string
   nodeId?: string
   theme?: string
+  iconOnly?: boolean
   onSearchIcon?: (nodeId: string, nodeType: string, label: string) => void
 }
 
@@ -22,8 +23,35 @@ const SIDES = [
   { pos: Position.Left,   id: 'left'   },
 ]
 
+function truncate(str: string, max: number) {
+  return str.length > max ? str.slice(0, max) + '…' : str
+}
+
 export default function InfraNode({ data }: { data: InfraNodeData }) {
   const hasIcon = !!data.iconUrl
+
+  if (data.iconOnly) {
+    return (
+      <div className="infra-node infra-node-icon-only">
+        {SIDES.map(({ pos, id }) => (
+          <React.Fragment key={id}>
+            <Handle type="target" position={pos} id={`${id}-t`} className="node-handle" />
+            <Handle type="source" position={pos} id={`${id}-s`} className="node-handle" />
+          </React.Fragment>
+        ))}
+        {hasIcon ? (
+          <img src={data.iconUrl!} className="node-icon-large" width={48} height={48}
+            onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+          />
+        ) : (
+          <div className="node-icon-placeholder" style={{ width: 48, height: 48, fontSize: 20 }}>
+            {data.nodeType?.[0]?.toUpperCase() || '?'}
+          </div>
+        )}
+        <span className="icon-only-label">{truncate(data.label, 14)}</span>
+      </div>
+    )
+  }
 
   return (
     <div className="infra-node">

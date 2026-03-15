@@ -60,7 +60,136 @@ const LABEL_STYLES = {
   },
 }
 
+export function irToFlowSequence(ir: ArchIR): { nodes: Node[], edges: Edge[] } {
+  const ACTOR_SPACING = 220
+  const MESSAGE_SPACING = 88
+  const MESSAGES_START_Y = 120
+
+  const actorIndex = new Map<string, number>()
+  ir.nodes.forEach((actor, i) => actorIndex.set(actor.id, i))
+
+  const sorted = [...ir.edges].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
+  const totalActors = ir.nodes.length
+  const totalW = Math.max(totalActors * ACTOR_SPACING, 300)
+
+  const nodes: Node[] = []
+
+  ir.nodes.forEach((actor, i) => {
+    nodes.push({
+      id: actor.id,
+      type: 'sequenceActor',
+      position: { x: i * ACTOR_SPACING, y: 0 },
+      data: {
+        label: actor.label,
+        iconUrl: resolveIconUrl(actor.icon, 'dark'),
+        totalMessages: sorted.length,
+        messageSpacing: MESSAGE_SPACING,
+      },
+    })
+  })
+
+  sorted.forEach((msg, i) => {
+    const srcIdx = actorIndex.get(msg.from) ?? 0
+    const tgtIdx = actorIndex.get(msg.to) ?? 0
+    const y = MESSAGES_START_Y + i * MESSAGE_SPACING
+    nodes.push({
+      id: `seq-msg-${msg.id}`,
+      type: 'sequenceMessage',
+      position: { x: 0, y },
+      data: {
+        label: msg.label || '',
+        sourceIdx: srcIdx,
+        targetIdx: tgtIdx,
+        totalActors,
+        actorSpacing: ACTOR_SPACING,
+        stepNum: i + 1,
+      },
+      style: { width: totalW, height: MESSAGE_SPACING - 8, pointerEvents: 'none' as any },
+    })
+  })
+
+  return { nodes, edges: [] }
+}
+
+export function irToFlowFlowchart(ir: ArchIR, theme: DiagramTheme = 'dark'): { nodes: Node[], edges: Edge[] } {
+  const lineStyles = theme === 'dark' ? LINE_STYLES_DARK : LINE_STYLES_LIGHT
+  const labelStyle = LABEL_STYLES[theme]
+
+  const inDegree = new Map<string, number>()
+  const adjList = new Map<string, string[]>()
+  ir.nodes.forEach(n => { inDegree.set(n.id, 0); adjList.set(n.id, []) })
+  ir.edges.forEach(e => {
+    inDegree.set(e.to, (inDegree.get(e.to) || 0) + 1)
+    adjList.get(e.from)?.push(e.to)
+  })
+
+  const depth = new Map<string, number>()
+  const queue: string[] = []
+  ir.nodes.forEach(n => {
+    if ((inDegree.get(n.id) || 0) === 0) {
+      depth.set(n.id, 0)
+      queue.push(n.id)
+    }
+  })
+  while (queue.length > 0) {
+    const id = queue.shift()!
+    for (const nextId of adjList.get(id) || []) {
+      if (!depth.has(nextId)) {
+        depth.set(nextId, (depth.get(id) || 0) + 1)
+        queue.push(nextId)
+      }
+    }
+  }
+
+  const byDepth = new Map<number, any[]>()
+  ir.nodes.forEach(n => {
+    const d = depth.get(n.id) || 0
+    if (!byDepth.has(d)) byDepth.set(d, [])
+    byDepth.get(d)!.push(n)
+  })
+
+  const VERT_SPACING = 140
+  const HORIZ_SPACING = 180
+  const CENTER_X = 400
+
+  const nodes: Node[] = []
+  byDepth.forEach((nodesAtDepth, d) => {
+    const totalW = (nodesAtDepth.length - 1) * HORIZ_SPACING
+    nodesAtDepth.forEach((n, i) => {
+      nodes.push({
+        id: n.id,
+        type: 'flowNode',
+        position: { x: CENTER_X + i * HORIZ_SPACING - totalW / 2, y: d * VERT_SPACING },
+        data: { label: n.label, nodeType: n.type || 'process' },
+      })
+    })
+  })
+
+  const edges: Edge[] = ir.edges.map(e => {
+    const ls = lineStyles[e.line_type || 'general'] || lineStyles.general
+    return {
+      id: e.id,
+      type: 'arrowEdge',
+      source: e.from,
+      target: e.to,
+      sourceHandle: 'bottom-s',
+      targetHandle: 'top-t',
+      label: e.label || '',
+      style: ls,
+      ...labelStyle,
+      labelBgPadding: [4, 8] as [number, number],
+      labelBgBorderRadius: 4,
+      data: { arrow: e.arrow || 'forward', routing: 'bezier', line_type: e.line_type || 'general' },
+    }
+  })
+
+  return { nodes, edges }
+}
+
 export function irToFlow(ir: ArchIR, theme: DiagramTheme = 'dark'): { nodes: Node[], edges: Edge[] } {
+  const diagramType = ir.meta?.diagram_type
+  if (diagramType === 'sequence') return irToFlowSequence(ir)
+  if (diagramType === 'flowchart') return irToFlowFlowchart(ir, theme)
   const nodes: Node[] = []
   const edges: Edge[] = []
   const lineStyles = theme === 'dark' ? LINE_STYLES_DARK : LINE_STYLES_LIGHT

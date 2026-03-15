@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Connection, Edge } from 'reactflow'
 import ReactFlow, {
   Background,
@@ -15,6 +15,9 @@ import { irToFlow, flowToIR, LINE_STYLES_DARK, LINE_STYLES_LIGHT } from '../util
 import type { DiagramTheme } from '../utils/irToFlow'
 import InfraNode from './nodes/InfraNode'
 import GroupNode from './nodes/GroupNode'
+import SequenceActorNode from './nodes/SequenceActorNode'
+import SequenceMessageNode from './nodes/SequenceMessageNode'
+import FlowNode from './nodes/FlowNode'
 import ArrowEdge, { EdgeDataUpdateCtx } from './edges/ArrowEdge'
 
 interface Props {
@@ -47,16 +50,20 @@ const LINE_TYPE_OPTIONS = [
 export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon, theme, onToggleTheme }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const [iconOnly, setIconOnly] = useState(false)
   const skipIrToFlowRef = useRef(false)
   // React Flow의 edge.selected를 직접 사용 (onEdgeClick 대신)
   const selectedEdge = edges.find(e => e.selected) ?? null
 
   const nodeTypes = useMemo(() => ({
     infraNode: (props: any) => (
-      <InfraNode {...props} data={{ ...props.data, onSearchIcon }} />
+      <InfraNode {...props} data={{ ...props.data, onSearchIcon, iconOnly }} />
     ),
     groupNode: GroupNode,
-  }), [onSearchIcon])
+    sequenceActor: SequenceActorNode,
+    sequenceMessage: SequenceMessageNode,
+    flowNode: FlowNode,
+  }), [onSearchIcon, iconOnly])
 
   const edgeTypes = useMemo(() => ({ arrowEdge: ArrowEdge }), [])
 
@@ -292,6 +299,11 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
       <div className="canvas-toolbar">
         <button onClick={handleSave} className="btn-primary">저장</button>
         <button onClick={handleExportPng} className="btn-secondary">PNG</button>
+        <button
+          onClick={() => setIconOnly(v => !v)}
+          className={`btn-secondary${iconOnly ? ' btn-active' : ''}`}
+          title="아이콘 전용 모드"
+        >아이콘</button>
         <button onClick={onToggleTheme} className="btn-secondary btn-theme">
           {isDark ? 'Light' : 'Dark'}
         </button>

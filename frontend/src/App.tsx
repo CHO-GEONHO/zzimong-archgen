@@ -18,6 +18,7 @@ export interface ArchIR {
     created_at: string
     source_type: string
     theme: string
+    diagram_type?: 'architecture' | 'sequence' | 'flowchart'
   }
   data_flow: string[]
   groups: any[]
@@ -68,7 +69,7 @@ export default function App() {
   }, [ir])
 
   return (
-    <div className={`app-container${theme === 'light' ? ' app-light' : ''}`}>
+    <div className="app-container">
       <Toaster
         position="top-right"
         toastOptions={{
@@ -94,7 +95,7 @@ export default function App() {
         </div>
 
         {/* 중앙: React Flow 캔버스 + DataFlow 패널 */}
-        <div className={`canvas-container${mobileTab === 'diagram' ? ' mobile-active' : ''}`}>
+        <div className={`canvas-container${mobileTab === 'diagram' ? ' mobile-active' : ''}${theme === 'light' ? ' canvas-light' : ''}`}>
           <ReactFlowProvider>
             <DiagramEditor
               ir={ir}

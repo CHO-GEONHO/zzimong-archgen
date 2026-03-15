@@ -10,6 +10,7 @@ router = APIRouter()
 class TextParseRequest(BaseModel):
     text: str
     title: Optional[str] = None
+    diagram_type: Optional[str] = None  # 'architecture' | 'sequence' | 'flowchart'
 
 
 class CLIParseRequest(BaseModel):
@@ -28,7 +29,7 @@ async def parse_text(request: TextParseRequest):
     try:
         from core.parser import TextParser
         parser = TextParser()
-        ir = await parser.parse(request.text)
+        ir = await parser.parse(request.text, diagram_type=request.diagram_type)
         if request.title:
             ir["meta"]["title"] = request.title
         return {"ir": ir}

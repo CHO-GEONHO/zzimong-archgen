@@ -231,10 +231,10 @@ body::before {
 }
 .edge-toolbar-label-input::placeholder { color: rgba(255,255,255,0.25); }
 .edge-toolbar-label-input:focus { border-color: rgba(167,139,250,0.6); }
-.app-light .edge-toolbar-label-input {
+.canvas-light .edge-toolbar-label-input {
   background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); color: #1e293b;
 }
-.app-light .edge-toolbar-label-input:focus { border-color: rgba(124,58,237,0.5); }
+.canvas-light .edge-toolbar-label-input:focus { border-color: rgba(124,58,237,0.5); }
 .edge-toolbar-close {
   padding: 3px 7px; border-radius: 6px; font-size: 11px;
   background: transparent; border: none; color: rgba(255,255,255,0.3);
@@ -242,16 +242,16 @@ body::before {
 }
 .edge-toolbar-close:hover { color: rgba(255,255,255,0.7); }
 /* 라이트 테마 */
-.app-light .edge-toolbar {
+.canvas-light .edge-toolbar {
   background: rgba(255,255,255,0.95);
   border-color: rgba(0,0,0,0.1);
   box-shadow: 0 4px 20px rgba(0,0,0,0.12);
 }
-.app-light .edge-toolbar-btn { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); color: #475569; }
-.app-light .edge-toolbar-btn:hover { background: rgba(0,0,0,0.08); color: #1e293b; }
-.app-light .edge-toolbar-btn.active { background: rgba(124,58,237,0.1); border-color: rgba(124,58,237,0.4); color: #7c3aed; }
-.app-light .edge-toolbar-divider { background: rgba(0,0,0,0.1); }
-.app-light .edge-toolbar-close { color: rgba(0,0,0,0.3); }
+.canvas-light .edge-toolbar-btn { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); color: #475569; }
+.canvas-light .edge-toolbar-btn:hover { background: rgba(0,0,0,0.08); color: #1e293b; }
+.canvas-light .edge-toolbar-btn.active { background: rgba(124,58,237,0.1); border-color: rgba(124,58,237,0.4); color: #7c3aed; }
+.canvas-light .edge-toolbar-divider { background: rgba(0,0,0,0.1); }
+.canvas-light .edge-toolbar-close { color: rgba(0,0,0,0.3); }
 
 .canvas-toolbar {
   position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
@@ -354,7 +354,7 @@ body::before {
   opacity: 1 !important;
 }
 /* 라이트 테마 */
-.app-light .node-handle {
+.canvas-light .node-handle {
   background: #7c3aed !important;
   border-color: #fff !important;
 }
@@ -584,97 +584,228 @@ body::before {
   .app-container { padding-bottom: 0; }
 }
 
-/* ===== Light Theme ===== */
-.app-light { background: #f8fafc; }
-.app-light .canvas-container { background: #f8fafc; }
-.app-light .react-flow { background: #f8fafc !important; }
+/* ===== Canvas Light Theme (캔버스 내부만) ===== */
+.canvas-light { background: #f8fafc; }
+.canvas-light .react-flow { background: #f8fafc !important; }
 
 /* 노드 */
-.app-light .infra-node {
+.canvas-light .infra-node {
   background: rgba(255,255,255,0.95);
   border-color: rgba(0,0,0,0.12);
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
 }
-.app-light .node-label { color: #1e293b; }
-.app-light .node-sublabel { color: #64748b; }
-.app-light .node-badge { background: rgba(0,0,0,0.06); color: #475569; }
-.app-light .node-icon-placeholder {
+.canvas-light .node-label { color: #1e293b; }
+.canvas-light .node-sublabel { color: #64748b; }
+.canvas-light .node-badge { background: rgba(0,0,0,0.06); color: #475569; }
+.canvas-light .node-icon-placeholder {
   background: rgba(0,0,0,0.06);
   color: #64748b;
 }
 
 /* 그룹 노드 */
-.app-light .group-node-label { color: #1e293b; }
-.app-light .group-node-sublabel { color: #64748b; }
-.app-light .group-node-dot { opacity: 0.8; }
+.canvas-light .group-node-label { color: #1e293b; }
+.canvas-light .group-node-sublabel { color: #64748b; }
+.canvas-light .group-node-dot { opacity: 0.8; }
 
-/* 패널 */
-.app-light .panel-left-wrap,
-.app-light .panel-right-wrap {
-  background: rgba(255,255,255,0.95);
-  border-color: rgba(0,0,0,0.08);
-}
-.app-light .panel-left-wrap textarea,
-.app-light .panel-right-wrap textarea {
-  background: #f1f5f9;
-  color: #1e293b;
-  border-color: rgba(0,0,0,0.1);
-}
-
-/* 헤더 */
-.app-light .app-header {
-  background: rgba(255,255,255,0.9);
-  border-color: rgba(0,0,0,0.08);
-}
-.app-light .app-header h1,
-.app-light .header-title { color: #1e293b; }
-.app-light .header-subtitle { color: #64748b; }
-
-/* 툴바 버튼 */
-.app-light .btn-primary {
+/* 캔버스 툴바 버튼 */
+.canvas-light .btn-primary {
   background: #3b82f6;
   color: #fff;
 }
-.app-light .btn-secondary {
+.canvas-light .btn-secondary {
   background: rgba(0,0,0,0.06);
   color: #334155;
   border-color: rgba(0,0,0,0.1);
 }
-.app-light .btn-secondary:hover {
+.canvas-light .btn-secondary:hover {
   background: rgba(0,0,0,0.1);
 }
 
 /* 데이터 플로우 패널 */
-.app-light .dataflow-panel {
+.canvas-light .dataflow-panel {
   background: rgba(255,255,255,0.95);
   border-color: rgba(0,0,0,0.08);
 }
-.app-light .dataflow-header { color: #1e293b; }
-.app-light .dataflow-step-text { color: #334155; }
-.app-light .dataflow-step-num {
+.canvas-light .dataflow-header { color: #1e293b; }
+.canvas-light .dataflow-step-text { color: #334155; }
+.canvas-light .dataflow-step-num {
   background: #3b82f6;
   color: #fff;
 }
-.app-light .dataflow-step-line {
+.canvas-light .dataflow-step-line {
   background: linear-gradient(to bottom, #3b82f6, #93c5fd);
 }
 
 /* 빈 캔버스 */
-.app-light .canvas-empty { background: #f8fafc; }
-.app-light .empty-message h2 { color: #1e293b; }
-.app-light .empty-message p { color: #64748b; }
+.canvas-light .canvas-empty { background: #f8fafc; }
+.canvas-light .empty-message h2 { color: #1e293b; }
+.canvas-light .empty-message p { color: #64748b; }
 
 /* React Flow 컨트롤 */
-.app-light .react-flow__controls button {
+.canvas-light .react-flow__controls button {
   background: #fff;
   color: #334155;
   border-color: rgba(0,0,0,0.1);
 }
-.app-light .react-flow__controls button:hover {
+.canvas-light .react-flow__controls button:hover {
   background: #f1f5f9;
 }
-.app-light .react-flow__controls button svg { fill: #334155; }
-.app-light .react-flow__minimap { background: #f1f5f9; }
+.canvas-light .react-flow__controls button svg { fill: #334155; }
+.canvas-light .react-flow__minimap { background: #f1f5f9; }
 
 /* 테마 토글 버튼 */
 .btn-theme { min-width: 52px; }
+
+/* 활성 버튼 (아이콘 전용 등) */
+.btn-active {
+  background: rgba(167,139,250,0.2) !important;
+  border-color: rgba(167,139,250,0.5) !important;
+  color: #a78bfa !important;
+}
+
+/* ── 아이콘 전용 모드 ── */
+.infra-node-icon-only {
+  width: 80px !important;
+  height: 80px !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 16px;
+  padding: 8px 4px 6px;
+}
+.node-icon-large {
+  display: block;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.icon-only-label {
+  font-size: 9px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.8);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 72px;
+  line-height: 1.2;
+}
+.canvas-light .icon-only-label { color: #1e293b; }
+
+/* ── 다이어그램 타입 선택기 ── */
+.diagram-type-selector {
+  display: flex;
+  gap: 4px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 3px;
+}
+.diagram-type-btn {
+  flex: 1;
+  padding: 6px 4px;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  color: rgba(255,255,255,0.4);
+  font-size: 10px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+  white-space: nowrap;
+}
+.diagram-type-btn:hover { color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.05); }
+.diagram-type-btn.active { background: rgba(167,139,250,0.15); color: #a78bfa; }
+
+/* ── 시퀀스 다이어그램 ── */
+.seq-actor-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 10px;
+  min-width: 100px;
+  max-width: 180px;
+}
+.seq-actor-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(226,232,240,0.95);
+  text-align: center;
+  white-space: nowrap;
+}
+.seq-lifeline {
+  width: 1px;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(148,163,184,0.5) 0px,
+    rgba(148,163,184,0.5) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+  margin: 0 auto;
+}
+
+/* ── 플로우차트 노드 ── */
+.flow-node {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: default;
+}
+.flow-node-process {
+  background: rgba(255,255,255,0.07);
+  border: 1.5px solid rgba(148,163,184,0.4);
+  border-radius: 8px;
+  padding: 10px 20px;
+  min-width: 120px;
+}
+.flow-node-terminal {
+  background: rgba(96,165,250,0.12);
+  border: 1.5px solid rgba(96,165,250,0.5);
+  border-radius: 50px;
+  padding: 10px 24px;
+  min-width: 100px;
+}
+.flow-node-decision {
+  width: 120px;
+  height: 60px;
+}
+.flow-node-diamond {
+  width: 120px;
+  height: 60px;
+  background: rgba(167,139,250,0.12);
+  border: 1.5px solid rgba(167,139,250,0.5);
+  transform: rotate(45deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.flow-node-diamond-inner {
+  transform: rotate(-45deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+.flow-node-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(226,232,240,0.9);
+  text-align: center;
+  white-space: nowrap;
+}
+.canvas-light .flow-node-process { background: rgba(255,255,255,0.95); border-color: rgba(0,0,0,0.2); }
+.canvas-light .flow-node-terminal { background: rgba(37,99,235,0.1); border-color: rgba(37,99,235,0.4); }
+.canvas-light .flow-node-diamond { background: rgba(109,40,217,0.1); border-color: rgba(109,40,217,0.4); }
+.canvas-light .flow-node-label { color: #1e293b; }
+.canvas-light .seq-actor-box { background: rgba(255,255,255,0.9); border-color: rgba(0,0,0,0.15); }
+.canvas-light .seq-actor-label { color: #1e293b; }
