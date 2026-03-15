@@ -1,3 +1,4 @@
+import React from 'react'
 import { Handle, Position } from 'reactflow'
 
 interface InfraNodeData {
@@ -10,15 +11,28 @@ interface InfraNodeData {
   tags?: string[]
   nodeType?: string
   nodeId?: string
+  theme?: string
   onSearchIcon?: (nodeId: string, nodeType: string, label: string) => void
 }
+
+const SIDES = [
+  { pos: Position.Top,    id: 'top'    },
+  { pos: Position.Right,  id: 'right'  },
+  { pos: Position.Bottom, id: 'bottom' },
+  { pos: Position.Left,   id: 'left'   },
+]
 
 export default function InfraNode({ data }: { data: InfraNodeData }) {
   const hasIcon = !!data.iconUrl
 
   return (
     <div className="infra-node">
-      <Handle type="target" position={Position.Left} />
+      {SIDES.map(({ pos, id }) => (
+        <React.Fragment key={id}>
+          <Handle type="target" position={pos} id={`${id}-t`} className="node-handle" />
+          <Handle type="source" position={pos} id={`${id}-s`} className="node-handle" />
+        </React.Fragment>
+      ))}
 
       <div className="infra-node-content">
         {/* 아이콘 영역 */}
@@ -70,7 +84,6 @@ export default function InfraNode({ data }: { data: InfraNodeData }) {
         <span className="node-tag spot">Spot</span>
       )}
 
-      <Handle type="source" position={Position.Right} />
     </div>
   )
 }

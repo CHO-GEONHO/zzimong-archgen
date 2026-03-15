@@ -275,6 +275,27 @@ body::before {
   box-shadow: 0 4px 30px rgba(167,139,250,0.15), 0 4px 20px rgba(0,0,0,0.3);
   transform: translateY(-1px);
 }
+
+/* ── 4방향 연결 핸들 ── */
+.node-handle {
+  width: 10px !important;
+  height: 10px !important;
+  background: #a78bfa !important;
+  border: 2px solid #fff !important;
+  border-radius: 50% !important;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 10;
+}
+.infra-node:hover .node-handle,
+.node-handle:hover {
+  opacity: 1 !important;
+}
+/* 라이트 테마 */
+.app-light .node-handle {
+  background: #7c3aed !important;
+  border-color: #fff !important;
+}
 .infra-node-content { display: flex; align-items: center; gap: 10px; }
 .node-icon { width: 36px; height: 36px; flex-shrink: 0; border-radius: 6px; }
 .node-icon-placeholder {
@@ -495,3 +516,98 @@ body::before {
   .main-layout { bottom: 56px; top: 0; }
   .app-container { padding-bottom: 0; }
 }
+
+/* ===== Light Theme ===== */
+.app-light { background: #f8fafc; }
+.app-light .canvas-container { background: #f8fafc; }
+.app-light .react-flow { background: #f8fafc !important; }
+
+/* 노드 */
+.app-light .infra-node {
+  background: rgba(255,255,255,0.95);
+  border-color: rgba(0,0,0,0.12);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+.app-light .node-label { color: #1e293b; }
+.app-light .node-sublabel { color: #64748b; }
+.app-light .node-badge { background: rgba(0,0,0,0.06); color: #475569; }
+.app-light .node-icon-placeholder {
+  background: rgba(0,0,0,0.06);
+  color: #64748b;
+}
+
+/* 그룹 노드 */
+.app-light .group-node-label { color: #1e293b; }
+.app-light .group-node-sublabel { color: #64748b; }
+.app-light .group-node-dot { opacity: 0.8; }
+
+/* 패널 */
+.app-light .panel-left-wrap,
+.app-light .panel-right-wrap {
+  background: rgba(255,255,255,0.95);
+  border-color: rgba(0,0,0,0.08);
+}
+.app-light .panel-left-wrap textarea,
+.app-light .panel-right-wrap textarea {
+  background: #f1f5f9;
+  color: #1e293b;
+  border-color: rgba(0,0,0,0.1);
+}
+
+/* 헤더 */
+.app-light .app-header {
+  background: rgba(255,255,255,0.9);
+  border-color: rgba(0,0,0,0.08);
+}
+.app-light .app-header h1,
+.app-light .header-title { color: #1e293b; }
+.app-light .header-subtitle { color: #64748b; }
+
+/* 툴바 버튼 */
+.app-light .btn-primary {
+  background: #3b82f6;
+  color: #fff;
+}
+.app-light .btn-secondary {
+  background: rgba(0,0,0,0.06);
+  color: #334155;
+  border-color: rgba(0,0,0,0.1);
+}
+.app-light .btn-secondary:hover {
+  background: rgba(0,0,0,0.1);
+}
+
+/* 데이터 플로우 패널 */
+.app-light .dataflow-panel {
+  background: rgba(255,255,255,0.95);
+  border-color: rgba(0,0,0,0.08);
+}
+.app-light .dataflow-header { color: #1e293b; }
+.app-light .dataflow-step-text { color: #334155; }
+.app-light .dataflow-step-num {
+  background: #3b82f6;
+  color: #fff;
+}
+.app-light .dataflow-step-line {
+  background: linear-gradient(to bottom, #3b82f6, #93c5fd);
+}
+
+/* 빈 캔버스 */
+.app-light .canvas-empty { background: #f8fafc; }
+.app-light .empty-message h2 { color: #1e293b; }
+.app-light .empty-message p { color: #64748b; }
+
+/* React Flow 컨트롤 */
+.app-light .react-flow__controls button {
+  background: #fff;
+  color: #334155;
+  border-color: rgba(0,0,0,0.1);
+}
+.app-light .react-flow__controls button:hover {
+  background: #f1f5f9;
+}
+.app-light .react-flow__controls button svg { fill: #334155; }
+.app-light .react-flow__minimap { background: #f1f5f9; }
+
+/* 테마 토글 버튼 */
+.btn-theme { min-width: 52px; }
