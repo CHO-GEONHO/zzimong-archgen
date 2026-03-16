@@ -7,6 +7,11 @@ export const EdgeDataUpdateCtx = React.createContext<
   (id: string, patch: Record<string, unknown>) => void
 >(() => {})
 
+// Context: 엔드포인트 재연결
+export const EdgeRerouteCtx = React.createContext<
+  (id: string, which: 'source' | 'target', nodeId: string, handleId: string) => void
+>(() => {})
+
 const ARROW_LEN = 10
 const ARROW_HALF = 3.5
 
@@ -31,16 +36,13 @@ const DEPARTURE: Record<string, number> = {
   [Position.Top]:    -Math.PI / 2,
 }
 
-// ── Waypoint 타입 ──────────────────────────────────────────────────────────────
 interface WP { x: number; y: number }
 
-// polyline SVG path: source → wp[0] → wp[1] → ... → target
 function buildPolylinePath(sx: number, sy: number, tx: number, ty: number, wps: WP[]): string {
   const pts: WP[] = [{ x: sx, y: sy }, ...wps, { x: tx, y: ty }]
   return pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
 }
 
-// polyline 레이블 중점: 가장 긴 세그먼트의 중간
 function polylineLabelCenter(sx: number, sy: number, tx: number, ty: number, wps: WP[]): WP {
   const pts: WP[] = [{ x: sx, y: sy }, ...wps, { x: tx, y: ty }]
   let maxLen = 0, bestMid: WP = { x: (sx + tx) / 2, y: (sy + ty) / 2 }
@@ -55,19 +57,20 @@ function polylineLabelCenter(sx: number, sy: number, tx: number, ty: number, wps
   return bestMid
 }
 
-// polyline 끝 화살표 각도: 마지막 세그먼트 방향
 function polylineEndAngle(tx: number, ty: number, wps: WP[]): number {
   const prev = wps.length > 0 ? wps[wps.length - 1] : null
   if (!prev) return 0
   return Math.atan2(ty - prev.y, tx - prev.x)
 }
 
-// polyline 시작 화살표 각도: 첫 세그먼트 반대 방향
 function polylineStartAngle(sx: number, sy: number, wps: WP[]): number {
   const next = wps.length > 0 ? wps[0] : null
   if (!next) return Math.PI
   return Math.atan2(sy - next.y, sx - next.x)
 }
+
+const EP_SNAP_R  = 30  // 엔드포인트 → 노드 핸들 스냅 반경
+const WP_SNAP_R  = 20  // 웨이포인트 → 웨이포인트 스냅 반경
 
 export default function ArrowEdge(props: EdgeProps) {
   const {
@@ -78,12 +81,21 @@ export default function ArrowEdge(props: EdgeProps) {
   } = props
 
   const updateEdgeData = React.useContext(EdgeDataUpdateCtx)
-  const transform = useStore(s => s.transform) // [panX, panY, zoom]
-  const zoom = transform[2]
-  const zoomRef = useRef(zoom)
-  zoomRef.current = zoom
+  const rerouteEdge    = React.useContext(EdgeRerouteCtx)
+
+  const transform = useStore(s => s.transform)
   const transformRef = useRef(transform)
   transformRef.current = transform
+
+  // 스냅용: 모든 노드 internals (절대 좌표 포함)
+  const nodeInternals = useStore(s => s.nodeInternals)
+  const nodeInternalsRef = useRef(nodeInternals)
+  nodeInternalsRef.current = nodeInternals
+
+  // 스냅용: 다른 엣지의 waypoints
+  const allEdges = useStore(s => s.edges)
+  const allEdgesRef = useRef(allEdges)
+  allEdgesRef.current = allEdges
 
   const arrow: string = data?.arrow ?? 'forward'
   const color: string = (style as any)?.stroke ?? '#94a3b8'
@@ -92,15 +104,16 @@ export default function ArrowEdge(props: EdgeProps) {
   const storedOffsetY: number = data?.labelOffsetY ?? 0
   const storedWaypoints: WP[] = data?.waypoints ?? []
 
-  // 라벨 드래그 상태
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null)
-  // 웨이포인트 드래그 상태: { wpIdx, wps(미리보기) }
-  const [wpDrag, setWpDrag] = useState<{ idx: number; wps: WP[] } | null>(null)
-  // straight/smoothstep 선택 시 가상 꺾임 드래그 상태
+  const [wpDrag, setWpDrag]         = useState<{ idx: number; wps: WP[] } | null>(null)
   const [virtualDrag, setVirtualDrag] = useState<{ idx: number; wps: WP[] } | null>(null)
+  // 엔드포인트 드래그: 출발/도착점 재연결
+  const [epDrag, setEpDrag] = useState<{
+    which: 'source' | 'target'
+    x: number; y: number
+    snap: { nodeId: string; handleId: string; x: number; y: number } | null
+  } | null>(null)
 
-  // polyline이면서 저장된 waypoint가 없을 때 → 렌더 시 Z자 계산 (side-effect 없음)
-  // 사용자가 드래그하면 그때 storedWaypoints에 저장됨
   function computeDefaultPolylineWps(): WP[] {
     const dx = targetX - sourceX
     const dy = targetY - sourceY
@@ -111,15 +124,64 @@ export default function ArrowEdge(props: EdgeProps) {
          { x: targetX, y: (sourceY + targetY) / 2 }]
   }
 
-  // straight/smoothstep 선택 시 가상 핸들 위치 (Z자)
   const virtualWps: WP[] = routing !== 'polyline' ? computeDefaultPolylineWps() : []
 
-  // 현재 표시할 waypoints
   const currentWps: WP[] = wpDrag
     ? wpDrag.wps
     : storedWaypoints.length > 0
       ? storedWaypoints
       : routing === 'polyline' ? computeDefaultPolylineWps() : []
+
+  // ── 스크린 → 캔버스 좌표 변환 ─────────────────────────────────────────────────
+  function toCanvas(cx: number, cy: number): WP {
+    const [tx, ty, tz] = transformRef.current
+    return { x: (cx - tx) / tz, y: (cy - ty) / tz }
+  }
+
+  // ── 노드 핸들 위치 목록 (드래그 시작 시점에 캡처) ─────────────────────────────
+  function getNodeHandlePositions() {
+    const result: { nodeId: string; handleId: string; x: number; y: number }[] = []
+    const SKIP = new Set(['groupNode', 'sequenceActor', 'sequenceMessage'])
+    nodeInternalsRef.current.forEach(node => {
+      if (SKIP.has(node.type ?? '')) return
+      const pos = (node as any).positionAbsolute
+      const w = (node as any).width ?? 0
+      const h = (node as any).height ?? 0
+      if (!pos || !w || !h) return
+      ;[
+        { id: 'right-s',  x: pos.x + w,     y: pos.y + h / 2 },
+        { id: 'left-s',   x: pos.x,          y: pos.y + h / 2 },
+        { id: 'top-s',    x: pos.x + w / 2,  y: pos.y         },
+        { id: 'bottom-s', x: pos.x + w / 2,  y: pos.y + h     },
+        { id: 'right-t',  x: pos.x + w,      y: pos.y + h / 2 },
+        { id: 'left-t',   x: pos.x,           y: pos.y + h / 2 },
+        { id: 'top-t',    x: pos.x + w / 2,   y: pos.y         },
+        { id: 'bottom-t', x: pos.x + w / 2,   y: pos.y + h     },
+      ].forEach(h => result.push({ nodeId: node.id, ...h }))
+    })
+    return result
+  }
+
+  function findNodeSnap(cx: number, cy: number, handles: ReturnType<typeof getNodeHandlePositions>) {
+    let best = null, minD = EP_SNAP_R
+    for (const h of handles) {
+      const d = Math.hypot(cx - h.x, cy - h.y)
+      if (d < minD) { minD = d; best = h }
+    }
+    return best
+  }
+
+  function findWpSnap(cx: number, cy: number): WP | null {
+    let best: WP | null = null, minD = WP_SNAP_R
+    for (const e of allEdgesRef.current) {
+      if (e.id === id) continue
+      for (const wp of (e.data?.waypoints ?? [])) {
+        const d = Math.hypot(cx - wp.x, cy - wp.y)
+        if (d < minD) { minD = d; best = wp }
+      }
+    }
+    return best
+  }
 
   // ── 경로 계산 ────────────────────────────────────────────────────────────────
   let edgePath: string
@@ -129,7 +191,6 @@ export default function ArrowEdge(props: EdgeProps) {
   let startAngle: number
 
   if (virtualDrag) {
-    // 가상 꺾임 드래그 중: polyline 경로로 미리보기
     const wps = virtualDrag.wps
     edgePath = buildPolylinePath(sourceX, sourceY, targetX, targetY, wps)
     const lc = polylineLabelCenter(sourceX, sourceY, targetX, targetY, wps)
@@ -143,13 +204,11 @@ export default function ArrowEdge(props: EdgeProps) {
     endAngle   = currentWps.length > 0 ? polylineEndAngle(targetX, targetY, currentWps) : Math.atan2(targetY - sourceY, targetX - sourceX)
     startAngle = currentWps.length > 0 ? polylineStartAngle(sourceX, sourceY, currentWps) : Math.atan2(sourceY - targetY, sourceX - targetX)
   } else if (routing === 'straight') {
-    // straight: 실제 선 방향으로 화살표 각도 계산
     const [path, lx, ly] = getStraightPath({ sourceX, sourceY, targetX, targetY })
     edgePath = path; labelX = lx; labelY = ly
     endAngle   = Math.atan2(targetY - sourceY, targetX - sourceX)
     startAngle = Math.atan2(sourceY - targetY, sourceX - targetX)
   } else {
-    // bezier / smoothstep: 핸들 방향 기반 각도 (곡선 끝 방향과 일치)
     const [path, lx, ly] = routing === 'smoothstep'
       ? getSmoothStepPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition })
       : getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition })
@@ -172,13 +231,15 @@ export default function ArrowEdge(props: EdgeProps) {
     const startMx = e.clientX, startMy = e.clientY
     const startOx = storedOffsetX, startOy = storedOffsetY
     const onMouseMove = (ev: MouseEvent) => {
-      const dx = (ev.clientX - startMx) / zoomRef.current
-      const dy = (ev.clientY - startMy) / zoomRef.current
+      const [tx, ty, tz] = transformRef.current
+      const dx = (ev.clientX - startMx) / tz
+      const dy = (ev.clientY - startMy) / tz
       setDragOffset({ x: startOx + dx, y: startOy + dy })
     }
     const onMouseUp = (ev: MouseEvent) => {
-      const dx = (ev.clientX - startMx) / zoomRef.current
-      const dy = (ev.clientY - startMy) / zoomRef.current
+      const [tx, ty, tz] = transformRef.current
+      const dx = (ev.clientX - startMx) / tz
+      const dy = (ev.clientY - startMy) / tz
       setDragOffset(null)
       updateEdgeData(id, { labelOffsetX: startOx + dx, labelOffsetY: startOy + dy })
       window.removeEventListener('mousemove', onMouseMove)
@@ -188,27 +249,27 @@ export default function ArrowEdge(props: EdgeProps) {
     window.addEventListener('mouseup', onMouseUp)
   }
 
-  // ── 웨이포인트 드래그 ─────────────────────────────────────────────────────────
+  // ── 웨이포인트 드래그 (꺾임점↔꺾임점 스냅 포함) ──────────────────────────────
   const onWaypointMouseDown = (e: React.MouseEvent, idx: number) => {
     e.stopPropagation(); e.preventDefault()
     const startMx = e.clientX, startMy = e.clientY
-    // 저장된 waypoint가 없으면 현재 렌더 기준(Z자 기본값)을 베이스로 사용
     const baseWps = currentWps
-    const origWp = baseWps[idx]
+    const origWp  = baseWps[idx]
     const onMouseMove = (ev: MouseEvent) => {
-      const dx = (ev.clientX - startMx) / zoomRef.current
-      const dy = (ev.clientY - startMy) / zoomRef.current
-      const newWps = baseWps.map((wp, i) =>
-        i === idx ? { x: origWp.x + dx, y: origWp.y + dy } : wp
-      )
-      setWpDrag({ idx, wps: newWps })
+      const [, , tz] = transformRef.current
+      const dx = (ev.clientX - startMx) / tz
+      const dy = (ev.clientY - startMy) / tz
+      const rawPos = { x: origWp.x + dx, y: origWp.y + dy }
+      const snapPos = findWpSnap(rawPos.x, rawPos.y) ?? rawPos
+      setWpDrag({ idx, wps: baseWps.map((wp, i) => i === idx ? snapPos : wp) })
     }
     const onMouseUp = (ev: MouseEvent) => {
-      const dx = (ev.clientX - startMx) / zoomRef.current
-      const dy = (ev.clientY - startMy) / zoomRef.current
-      const newWps = baseWps.map((wp, i) =>
-        i === idx ? { x: origWp.x + dx, y: origWp.y + dy } : wp
-      )
+      const [, , tz] = transformRef.current
+      const dx = (ev.clientX - startMx) / tz
+      const dy = (ev.clientY - startMy) / tz
+      const rawPos = { x: origWp.x + dx, y: origWp.y + dy }
+      const snapPos = findWpSnap(rawPos.x, rawPos.y) ?? rawPos
+      const newWps = baseWps.map((wp, i) => i === idx ? snapPos : wp)
       setWpDrag(null)
       updateEdgeData(id, { waypoints: newWps })
       window.removeEventListener('mousemove', onMouseMove)
@@ -218,29 +279,32 @@ export default function ArrowEdge(props: EdgeProps) {
     window.addEventListener('mouseup', onMouseUp)
   }
 
-  // 웨이포인트 삭제 (더블클릭)
   const onWaypointDblClick = (e: React.MouseEvent, idx: number) => {
     e.stopPropagation(); e.preventDefault()
-    const baseWps = currentWps
-    const newWps = baseWps.filter((_, i) => i !== idx)
-    updateEdgeData(id, { waypoints: newWps })
+    updateEdgeData(id, { waypoints: currentWps.filter((_, i) => i !== idx) })
   }
 
-  // ── 가상 핸들 드래그 (straight/smoothstep → polyline 변환) ──────────────────
+  // ── 가상 핸들 드래그 (straight/smoothstep → polyline, 꺾임점 스냅 포함) ───────
   const onVirtualWpMouseDown = (e: React.MouseEvent, idx: number) => {
     e.stopPropagation(); e.preventDefault()
     const startMx = e.clientX, startMy = e.clientY
     const baseWps = virtualWps
-    const origWp = baseWps[idx]
+    const origWp  = baseWps[idx]
     const onMouseMove = (ev: MouseEvent) => {
-      const dx = (ev.clientX - startMx) / zoomRef.current
-      const dy = (ev.clientY - startMy) / zoomRef.current
-      setVirtualDrag({ idx, wps: baseWps.map((wp, i) => i === idx ? { x: origWp.x + dx, y: origWp.y + dy } : wp) })
+      const [, , tz] = transformRef.current
+      const dx = (ev.clientX - startMx) / tz
+      const dy = (ev.clientY - startMy) / tz
+      const rawPos = { x: origWp.x + dx, y: origWp.y + dy }
+      const snapPos = findWpSnap(rawPos.x, rawPos.y) ?? rawPos
+      setVirtualDrag({ idx, wps: baseWps.map((wp, i) => i === idx ? snapPos : wp) })
     }
     const onMouseUp = (ev: MouseEvent) => {
-      const dx = (ev.clientX - startMx) / zoomRef.current
-      const dy = (ev.clientY - startMy) / zoomRef.current
-      const finalWps = baseWps.map((wp, i) => i === idx ? { x: origWp.x + dx, y: origWp.y + dy } : wp)
+      const [, , tz] = transformRef.current
+      const dx = (ev.clientX - startMx) / tz
+      const dy = (ev.clientY - startMy) / tz
+      const rawPos = { x: origWp.x + dx, y: origWp.y + dy }
+      const snapPos = findWpSnap(rawPos.x, rawPos.y) ?? rawPos
+      const finalWps = baseWps.map((wp, i) => i === idx ? snapPos : wp)
       setVirtualDrag(null)
       updateEdgeData(id, { routing: 'polyline', routing_mode: 'polyline', waypoints: finalWps })
       window.removeEventListener('mousemove', onMouseMove)
@@ -250,49 +314,20 @@ export default function ArrowEdge(props: EdgeProps) {
     window.addEventListener('mouseup', onMouseUp)
   }
 
-  // ── 세그먼트 중간점 클릭 → 새 웨이포인트 삽입 ──────────────────────────────
-  // 세그먼트 목록: 전체 점 배열에서 인접 쌍
-  const allPts: WP[] = [{ x: sourceX, y: sourceY }, ...currentWps, { x: targetX, y: targetY }]
-  const segmentMidpoints: { x: number; y: number; insertIdx: number }[] = []
-  if (routing === 'polyline') {
-    for (let i = 0; i < allPts.length - 1; i++) {
-      segmentMidpoints.push({
-        x: (allPts[i].x + allPts[i+1].x) / 2,
-        y: (allPts[i].y + allPts[i+1].y) / 2,
-        insertIdx: i, // 이 인덱스 뒤에 삽입
-      })
-    }
-  }
-
-  const onSegmentMidMouseDown = (e: React.MouseEvent, insertIdx: number, mx: number, my: number) => {
+  // ── 엔드포인트 드래그 (출발/도착점 재연결) ────────────────────────────────────
+  const onEndpointMouseDown = (e: React.MouseEvent, which: 'source' | 'target') => {
     e.stopPropagation(); e.preventDefault()
-    const baseWps = currentWps
-    const newWps = [
-      ...baseWps.slice(0, insertIdx),
-      { x: mx, y: my },
-      ...baseWps.slice(insertIdx),
-    ]
-    updateEdgeData(id, { waypoints: newWps })
-
-    // 삽입 직후 드래그 시작 (insertIdx가 새 wp의 인덱스)
-    const startMx = e.clientX, startMy = e.clientY
-    const origWp = { x: mx, y: my }
+    const handles = getNodeHandlePositions() // 드래그 시작 시점에 캡처
     const onMouseMove = (ev: MouseEvent) => {
-      const dx = (ev.clientX - startMx) / zoomRef.current
-      const dy = (ev.clientY - startMy) / zoomRef.current
-      const preview = newWps.map((wp, i) =>
-        i === insertIdx ? { x: origWp.x + dx, y: origWp.y + dy } : wp
-      )
-      setWpDrag({ idx: insertIdx, wps: preview })
+      const pos  = toCanvas(ev.clientX, ev.clientY)
+      const snap = findNodeSnap(pos.x, pos.y, handles)
+      setEpDrag({ which, x: pos.x, y: pos.y, snap })
     }
     const onMouseUp = (ev: MouseEvent) => {
-      const dx = (ev.clientX - startMx) / zoomRef.current
-      const dy = (ev.clientY - startMy) / zoomRef.current
-      const finalWps = newWps.map((wp, i) =>
-        i === insertIdx ? { x: origWp.x + dx, y: origWp.y + dy } : wp
-      )
-      setWpDrag(null)
-      updateEdgeData(id, { waypoints: finalWps })
+      const pos  = toCanvas(ev.clientX, ev.clientY)
+      const snap = findNodeSnap(pos.x, pos.y, handles)
+      setEpDrag(null)
+      if (snap) rerouteEdge(id, which, snap.nodeId, snap.handleId)
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup', onMouseUp)
     }
@@ -300,20 +335,74 @@ export default function ArrowEdge(props: EdgeProps) {
     window.addEventListener('mouseup', onMouseUp)
   }
 
-  const labelText = typeof label === 'string' ? label : ''
+  // ── 세그먼트 중간점 → 새 웨이포인트 삽입 ────────────────────────────────────
+  const allPts: WP[] = [{ x: sourceX, y: sourceY }, ...currentWps, { x: targetX, y: targetY }]
+  const segmentMidpoints: { x: number; y: number; insertIdx: number }[] = []
+  if (routing === 'polyline') {
+    for (let i = 0; i < allPts.length - 1; i++) {
+      segmentMidpoints.push({
+        x: (allPts[i].x + allPts[i+1].x) / 2,
+        y: (allPts[i].y + allPts[i+1].y) / 2,
+        insertIdx: i,
+      })
+    }
+  }
 
-  // labelStyle/labelBgStyle은 SVG용 fill 속성을 사용 → HTML div에선 color/background로 변환
-  const textColor = (labelStyle as any)?.fill
-  const bgColor = (labelBgStyle as any)?.fill
+  const onSegmentMidMouseDown = (e: React.MouseEvent, insertIdx: number, mx: number, my: number) => {
+    e.stopPropagation(); e.preventDefault()
+    const baseWps = currentWps
+    const newWps  = [...baseWps.slice(0, insertIdx), { x: mx, y: my }, ...baseWps.slice(insertIdx)]
+    updateEdgeData(id, { waypoints: newWps })
+    const startMx = e.clientX, startMy = e.clientY
+    const origWp  = { x: mx, y: my }
+    const onMouseMove = (ev: MouseEvent) => {
+      const [, , tz] = transformRef.current
+      const dx = (ev.clientX - startMx) / tz
+      const dy = (ev.clientY - startMy) / tz
+      const rawPos = { x: origWp.x + dx, y: origWp.y + dy }
+      const snapPos = findWpSnap(rawPos.x, rawPos.y) ?? rawPos
+      setWpDrag({ idx: insertIdx, wps: newWps.map((wp, i) => i === insertIdx ? snapPos : wp) })
+    }
+    const onMouseUp = (ev: MouseEvent) => {
+      const [, , tz] = transformRef.current
+      const dx = (ev.clientX - startMx) / tz
+      const dy = (ev.clientY - startMy) / tz
+      const rawPos = { x: origWp.x + dx, y: origWp.y + dy }
+      const snapPos = findWpSnap(rawPos.x, rawPos.y) ?? rawPos
+      setWpDrag(null)
+      updateEdgeData(id, { waypoints: newWps.map((wp, i) => i === insertIdx ? snapPos : wp) })
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }
+
+  const labelText  = typeof label === 'string' ? label : ''
+  const textColor  = (labelStyle as any)?.fill
+  const bgColor    = (labelBgStyle as any)?.fill
+
+  // epDrag 중 고정 끝점
+  const epFixed = epDrag
+    ? (epDrag.which === 'target' ? { x: sourceX, y: sourceY } : { x: targetX, y: targetY })
+    : null
+  const epMoving = epDrag
+    ? (epDrag.snap ? { x: epDrag.snap.x, y: epDrag.snap.y } : { x: epDrag.x, y: epDrag.y })
+    : null
 
   return (
     <>
       <BaseEdge id={id} path={edgePath} style={style} />
-      {showEnd && (
-        <polygon points={arrowPoints(targetX, targetY, endAngle)} fill={color} />
-      )}
-      {showStart && (
-        <polygon points={arrowPoints(sourceX, sourceY, startAngle)} fill={color} />
+      {showEnd && <polygon points={arrowPoints(targetX, targetY, endAngle)} fill={color} />}
+      {showStart && <polygon points={arrowPoints(sourceX, sourceY, startAngle)} fill={color} />}
+
+      {/* 엔드포인트 드래그 중: 고스트 라인 + 스냅 강조 */}
+      {epDrag && epFixed && epMoving && (
+        <line
+          x1={epFixed.x} y1={epFixed.y}
+          x2={epMoving.x} y2={epMoving.y}
+          stroke={color} strokeWidth={2} strokeDasharray="6,4" opacity={0.7}
+        />
       )}
 
       {/* 라벨 */}
@@ -326,14 +415,11 @@ export default function ArrowEdge(props: EdgeProps) {
               transform: `translate(-50%, -50%) translate(${finalLabelX}px, ${finalLabelY}px)`,
               cursor: dragOffset ? 'grabbing' : 'grab',
               pointerEvents: 'all',
-              padding: '2px 8px',
-              borderRadius: 4,
+              padding: '2px 8px', borderRadius: 4,
               fontSize: (labelStyle as any)?.fontSize ?? 11,
               fontWeight: (labelStyle as any)?.fontWeight ?? 500,
-              color: textColor,
-              background: bgColor,
-              userSelect: 'none',
-              whiteSpace: 'nowrap',
+              color: textColor, background: bgColor,
+              userSelect: 'none', whiteSpace: 'nowrap',
             }}
             onMouseDown={onLabelMouseDown}
           >
@@ -342,20 +428,65 @@ export default function ArrowEdge(props: EdgeProps) {
         </EdgeLabelRenderer>
       )}
 
-      {/* straight/smoothstep 선택 시: 가상 꺾임 핸들 표시 */}
-      {selected && routing !== 'polyline' && !virtualDrag && (
+      {/* 선택된 엣지: 출발/도착 엔드포인트 핸들 */}
+      {selected && !epDrag && (
+        <EdgeLabelRenderer>
+          {([
+            { which: 'source' as const, x: sourceX, y: sourceY },
+            { which: 'target' as const, x: targetX, y: targetY },
+          ]).map(({ which, x, y }) => (
+            <div
+              key={which}
+              className="nodrag nopan edge-endpoint-handle"
+              style={{
+                position: 'absolute', left: x, top: y,
+                transform: 'translate(-50%, -50%)',
+                pointerEvents: 'all', borderColor: color,
+              }}
+              onMouseDown={e => onEndpointMouseDown(e, which)}
+              title="드래그: 연결 변경"
+            />
+          ))}
+        </EdgeLabelRenderer>
+      )}
+
+      {/* 엔드포인트 드래그 중: 스냅 강조 원 + 이동 포인터 */}
+      {epDrag && (
+        <EdgeLabelRenderer>
+          {epDrag.snap && (
+            <div
+              className="edge-snap-highlight"
+              style={{
+                position: 'absolute',
+                left: epDrag.snap.x, top: epDrag.snap.y,
+                transform: 'translate(-50%, -50%)',
+              }}
+            />
+          )}
+          <div
+            className="edge-endpoint-handle edge-endpoint-dragging"
+            style={{
+              position: 'absolute',
+              left: epDrag.snap ? epDrag.snap.x : epDrag.x,
+              top:  epDrag.snap ? epDrag.snap.y : epDrag.y,
+              transform: 'translate(-50%, -50%)',
+              borderColor: color,
+            }}
+          />
+        </EdgeLabelRenderer>
+      )}
+
+      {/* straight/smoothstep 선택 시: 가상 꺾임 핸들 */}
+      {selected && routing !== 'polyline' && !virtualDrag && !epDrag && (
         <EdgeLabelRenderer>
           {virtualWps.map((wp, i) => (
             <div
               key={`vwp-${i}`}
               className="nodrag nopan waypoint-handle waypoint-handle-virtual"
               style={{
-                position: 'absolute',
-                left: wp.x,
-                top: wp.y,
+                position: 'absolute', left: wp.x, top: wp.y,
                 transform: 'translate(-50%, -50%)',
-                pointerEvents: 'all',
-                borderColor: color,
+                pointerEvents: 'all', borderColor: color,
               }}
               onMouseDown={e => onVirtualWpMouseDown(e, i)}
               title="드래그: 꺾임선으로 변환"
@@ -365,36 +496,28 @@ export default function ArrowEdge(props: EdgeProps) {
       )}
 
       {/* Polyline: 웨이포인트 핸들 + 세그먼트 중간점 핸들 (선택 시만) */}
-      {routing === 'polyline' && selected && (
+      {routing === 'polyline' && selected && !epDrag && (
         <EdgeLabelRenderer>
-          {/* 세그먼트 중간점 핸들 */}
           {segmentMidpoints.map((seg, i) => (
             <div
               key={`seg-mid-${i}`}
               className="nodrag nopan waypoint-mid-handle"
               style={{
-                position: 'absolute',
-                left: seg.x,
-                top: seg.y,
+                position: 'absolute', left: seg.x, top: seg.y,
                 transform: 'translate(-50%, -50%)',
                 pointerEvents: 'all',
               }}
               onMouseDown={e => onSegmentMidMouseDown(e, seg.insertIdx, seg.x, seg.y)}
             />
           ))}
-
-          {/* 웨이포인트 핸들 */}
           {currentWps.map((wp, i) => (
             <div
               key={`wp-${i}`}
               className="nodrag nopan waypoint-handle"
               style={{
-                position: 'absolute',
-                left: wp.x,
-                top: wp.y,
+                position: 'absolute', left: wp.x, top: wp.y,
                 transform: 'translate(-50%, -50%)',
-                pointerEvents: 'all',
-                borderColor: color,
+                pointerEvents: 'all', borderColor: color,
               }}
               onMouseDown={e => onWaypointMouseDown(e, i)}
               onDoubleClick={e => onWaypointDblClick(e, i)}

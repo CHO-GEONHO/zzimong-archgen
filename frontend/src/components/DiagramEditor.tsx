@@ -20,7 +20,7 @@ import GroupNode from './nodes/GroupNode'
 import SequenceActorNode from './nodes/SequenceActorNode'
 import SequenceMessageNode from './nodes/SequenceMessageNode'
 import FlowNode from './nodes/FlowNode'
-import ArrowEdge, { EdgeDataUpdateCtx } from './edges/ArrowEdge'
+import ArrowEdge, { EdgeDataUpdateCtx, EdgeRerouteCtx } from './edges/ArrowEdge'
 
 interface Props {
   ir: ArchIR | null
@@ -186,6 +186,27 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
     ))
   }, [setEdges])
 
+  // 엔드포인트 재연결: source 또는 target 노드/핸들 변경
+  const handleEdgeReroute = useCallback((
+    edgeId: string,
+    which: 'source' | 'target',
+    nodeId: string,
+    handleId: string,
+  ) => {
+    const curEdges = getEdges()
+    const newEdges = curEdges.map(e => {
+      if (e.id !== edgeId) return e
+      const patch = which === 'source'
+        ? { source: nodeId, sourceHandle: handleId }
+        : { target: nodeId, targetHandle: handleId }
+      // 경로가 바뀌므로 waypoints 초기화, smoothstep으로 리셋
+      return { ...e, ...patch, data: { ...e.data, waypoints: [], routing_mode: 'auto', routing: 'smoothstep' } }
+    })
+    skipIrToFlowRef.current = true
+    setEdges(newEdges)
+    if (irRef.current) onIrChange(flowToIR(irRef.current, getNodes(), newEdges))
+  }, [getEdges, getNodes, setEdges, onIrChange])
+
   // 툴바 라벨 입력
   const handleLabelChange = useCallback((label: string) => {
     setEdges(eds => {
@@ -349,6 +370,7 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
 
   return (
     <EdgeDataUpdateCtx.Provider value={handleEdgeDataUpdate}>
+    <EdgeRerouteCtx.Provider value={handleEdgeReroute}>
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       <ReactFlow
         nodes={nodes}
@@ -455,6 +477,7 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
         </button>
       </div>
     </div>
+    </EdgeRerouteCtx.Provider>
     </EdgeDataUpdateCtx.Provider>
   )
 }
