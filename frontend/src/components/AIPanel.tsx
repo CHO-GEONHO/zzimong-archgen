@@ -40,13 +40,19 @@ export default function AIPanel({ ir, diagramId, onIrChange }: Props) {
         }),
       })
       const data = await resp.json()
+      if (!resp.ok) {
+        toast.error(`수정 실패: ${data.detail || resp.status}`)
+        return
+      }
       if (data.ir) {
         onIrChange(data.ir)
         setModifyText('')
         toast.success('수정 완료!')
+      } else {
+        toast.error('응답 형식 오류 — IR 누락')
       }
     } catch (e) {
-      toast.error('수정 실패')
+      toast.error(`수정 실패: ${e instanceof Error ? e.message : '네트워크 오류'}`)
     } finally {
       setIsModifying(false)
     }

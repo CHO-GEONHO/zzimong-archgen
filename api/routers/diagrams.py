@@ -142,10 +142,31 @@ async def modify_diagram(request: ModifyRequest, db: AsyncSession = Depends(get_
 
         system_prompt = """당신은 인프라 아키텍처 JSON IR 수정 전문가입니다.
 사용자의 수정 지시에 따라 JSON IR을 정확히 수정하세요.
+
 규칙:
 - 수정 지시에 해당하는 부분만 변경하고, 나머지는 절대 변경하지 마세요.
 - 반드시 유효한 JSON만 출력하세요. JSON 외 텍스트는 절대 금지.
-- 노드/엣지 ID는 변경하지 마세요."""
+- 노드/엣지 ID는 변경하지 마세요.
+
+엣지 routing_mode 활용:
+- "auto": 자동 (기본값)
+- "bezier": 부드러운 곡선
+- "straight": 직선
+- "polyline": 꺾인 선 (waypoints와 함께)
+
+엣지 arrow 값:
+- "forward": from→to 방향
+- "backward": to→from 방향
+- "both": 양방향
+- "none": 화살표 없음
+
+엣지 line_type:
+- "general": 일반 (회색)
+- "data": 데이터 흐름 (보라색, 애니메이션)
+- "alert": 경고/보안 (빨간색)
+- "blue": 파란색
+- "lb": 로드밸런서 (점선)
+- "vpc": VPC 연결 (점선, 옅은 색)"""
 
         user_prompt = f"""현재 JSON IR:
 {json.dumps(request.ir_json, ensure_ascii=False, indent=2)}
@@ -165,15 +186,18 @@ async def modify_diagram(request: ModifyRequest, db: AsyncSession = Depends(get_
 
         modified_ir = json.loads(response.choices[0].message.content)
 
-        # 수정 이력 저장
-        history = ModifyHistory(
-            diagram_id=request.diagram_id,
-            instruction=request.instruction,
-            ir_before=json.dumps(request.ir_json, ensure_ascii=False),
-            ir_after=json.dumps(modified_ir, ensure_ascii=False),
-        )
-        db.add(history)
-        await db.commit()
+        # 수정 이력 저장 (실패해도 수정 결과는 반환)
+        try:
+            history = ModifyHistory(
+                diagram_id=request.diagram_id,
+                instruction=request.instruction,
+                ir_before=json.dumps(request.ir_json, ensure_ascii=False),
+                ir_after=json.dumps(modified_ir, ensure_ascii=False),
+            )
+            db.add(history)
+            await db.commit()
+        except Exception:
+            pass
 
         return {"ir": modified_ir}
     except Exception as e:

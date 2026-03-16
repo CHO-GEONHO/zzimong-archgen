@@ -42,6 +42,8 @@ export default function App() {
   const [mobileTab, setMobileTab] = useState<MobileTab>('input')
   const [iconSearch, setIconSearch] = useState<IconSearchState | null>(null)
   const [theme, setTheme] = useState<DiagramTheme>('dark')
+  const [showLeft, setShowLeft] = useState(true)
+  const [showRight, setShowRight] = useState(true)
 
   const handleParsed = (newIr: ArchIR, id?: string) => {
     setIr(newIr)
@@ -84,7 +86,7 @@ export default function App() {
       />
       <Header ir={ir} diagramId={diagramId} />
 
-      <div className="main-layout">
+      <div className={`main-layout${showLeft ? '' : ' hide-left'}${showRight ? '' : ' hide-right'}`}>
         {/* 좌측: 입력 패널 */}
         <div className={`panel-left-wrap${mobileTab === 'input' ? ' mobile-active' : ''}`}>
           <InputPanel
@@ -96,6 +98,13 @@ export default function App() {
 
         {/* 중앙: React Flow 캔버스 + DataFlow 패널 */}
         <div className={`canvas-container${mobileTab === 'diagram' ? ' mobile-active' : ''}${theme === 'light' ? ' canvas-light' : ''}`}>
+          {/* 패널 토글 버튼 */}
+          <button className="panel-toggle panel-toggle-left" onClick={() => setShowLeft(v => !v)} title={showLeft ? '입력 패널 숨기기' : '입력 패널 열기'}>
+            {showLeft ? '◀' : '▶'}
+          </button>
+          <button className="panel-toggle panel-toggle-right" onClick={() => setShowRight(v => !v)} title={showRight ? 'AI 패널 숨기기' : 'AI 패널 열기'}>
+            {showRight ? '▶' : '◀'}
+          </button>
           <ReactFlowProvider>
             <DiagramEditor
               ir={ir}
@@ -106,7 +115,6 @@ export default function App() {
               onToggleTheme={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
             />
           </ReactFlowProvider>
-          {/* 데이터 플로우 패널 (캔버스 하단) */}
           {ir && <DataFlowPanel ir={ir} />}
         </div>
 

@@ -49,24 +49,61 @@ const LINE_TYPE_OPTIONS = [
   { value: 'vpc',     label: 'VPC',    color: '#cbd5e1' },
 ]
 
+const ROUTING_OPTIONS = [
+  { value: 'auto',     label: '자동',  title: '방향에 따라 자동 선택' },
+  { value: 'bezier',   label: '곡선',  title: '베지어 곡선' },
+  { value: 'straight', label: '직선',  title: '직선' },
+  { value: 'polyline', label: '꺾임',  title: '중간점 직접 편집' },
+]
+
 export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon, theme, onToggleTheme }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const [iconOnly, setIconOnly] = useState(false)
-  const { getNodes, fitView } = useReactFlow()
+  const { getNodes, getEdges, fitView } = useReactFlow()
   const skipIrToFlowRef = useRef(false)
+  // ir을 ref로도 추적 — 콜백 내부에서 클로저 의존성 없이 최신값 접근
+  const irRef = useRef(ir)
+  irRef.current = ir
   // React Flow의 edge.selected를 직접 사용 (onEdgeClick 대신)
   const selectedEdge = edges.find(e => e.selected) ?? null
 
+  // 노드 라벨/서브라벨 인라인 편집 콜백
+  // flowToIR은 position만 업데이트 → label 변경은 IR을 직접 패치
+  // edges 의존성 없음 → nodeTypes 안정, 노드 remount 방지
+  const handleNodeLabelChange = useCallback((id: string, patch: { label?: string; sublabel?: string }) => {
+    setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, ...patch } } : n))
+    if (irRef.current) {
+      skipIrToFlowRef.current = true
+      const cur = irRef.current
+      onIrChange({
+        ...cur,
+        nodes:  cur.nodes.map(n  => n.id  === id ? { ...n,  ...patch } : n),
+        groups: cur.groups.map(g => g.id  === id ? { ...g,  label: patch.label ?? g.label } : g),
+      })
+    }
+  }, [onIrChange, setNodes])
+
+  // 그룹 리사이즈 시 자식 노드 위치 역방향 보정 (부모 position 변화 상쇄)
+  const handleGroupResize = useCallback((groupId: string, dx: number, dy: number) => {
+    setNodes(nds => nds.map(n =>
+      n.parentNode === groupId
+        ? { ...n, position: { x: n.position.x - dx, y: n.position.y - dy } }
+        : n
+    ))
+  }, [setNodes])
+
   const nodeTypes = useMemo(() => ({
     infraNode: (props: any) => (
-      <InfraNode {...props} data={{ ...props.data, onSearchIcon, iconOnly }} />
+      <InfraNode {...props} data={{ ...props.data, onSearchIcon, iconOnly, onLabelChange: handleNodeLabelChange }} />
     ),
-    groupNode: GroupNode,
+    groupNode: (props: any) => (
+      <GroupNode {...props} data={{ ...props.data, onLabelChange: handleNodeLabelChange, onGroupResize: handleGroupResize, onResizeEnd: handleGroupResizeEnd }} />
+    ),
     sequenceActor: SequenceActorNode,
     sequenceMessage: SequenceMessageNode,
     flowNode: FlowNode,
-  }), [onSearchIcon, iconOnly])
+  }), [onSearchIcon, iconOnly, handleNodeLabelChange, handleGroupResize])
 
   const edgeTypes = useMemo(() => ({ arrowEdge: ArrowEdge }), [])
 
@@ -130,7 +167,7 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
         ...connection,
         type: 'arrowEdge',
         style: ls,
-        data: { line_type: 'general', arrow: 'forward', routing: 'bezier' },
+        data: { line_type: 'general', arrow: 'forward', routing: 'straight', routing_mode: 'auto', waypoints: [] },
       }, eds))
     },
     [setEdges, getLineStyles],
@@ -176,6 +213,20 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
     })
   }, [setEdges, getLineStyles])
 
+  const handleRoutingChange = useCallback((routingMode: string) => {
+    setEdges(eds => {
+      const sel = eds.find(e => e.selected)
+      if (!sel) return eds
+      return eds.map(e => {
+        if (e.id !== sel.id) return e
+        const routing = routingMode === 'auto' ? 'smoothstep' : routingMode
+        // polyline 전환 시 기존 waypoints 초기화 → ArrowEdge에서 sourceX/Y 기반으로 자동 추가
+        const waypoints = routingMode === 'polyline' ? [] : (e.data?.waypoints ?? [])
+        return { ...e, data: { ...e.data, routing, routing_mode: routingMode, waypoints } }
+      })
+    })
+  }, [setEdges])
+
   const onEdgeUpdate = useCallback(
     (oldEdge: Edge, newConnection: Connection) => {
       skipIrToFlowRef.current = true
@@ -190,6 +241,13 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
     const updatedIr = flowToIR(ir, nodes, edges)
     onIrChange(updatedIr)
   }, [ir, nodes, edges, onIrChange])
+
+  // 그룹 리사이즈 완료 시 IR 동기화
+  const handleGroupResizeEnd = useCallback(() => {
+    if (!irRef.current) return
+    skipIrToFlowRef.current = true
+    onIrChange(flowToIR(irRef.current, getNodes(), getEdges()))
+  }, [onIrChange, getNodes, getEdges])
 
   const handleSave = async () => {
     if (!ir) return
@@ -232,6 +290,8 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
         backgroundColor: bgColor,
         pixelRatio: 2,
         filter: (node) => {
+          // SVG 포함 모든 Element에서 먼저 배경 도트 제거
+          if (node instanceof Element && node.classList.contains('react-flow__background')) return false
           if (!(node instanceof HTMLElement)) return true
           if (node.classList.contains('react-flow__minimap')) return false
           if (node.classList.contains('react-flow__controls')) return false
@@ -297,7 +357,7 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
         fitView
         fitViewOptions={{ padding: 0.15 }}
         connectionMode={ConnectionMode.Loose}
-        deleteKeyCode="Delete"
+        deleteKeyCode={['Delete', 'Backspace']}
         minZoom={0.2}
         maxZoom={2}
       >
@@ -311,6 +371,7 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
       {selectedEdge && (() => {
         const curArrow = selectedEdge?.data?.arrow || 'forward'
         const curLine = selectedEdge?.data?.line_type || 'general'
+        const curRouting = selectedEdge?.data?.routing_mode || 'auto'
         return (
           <div className="edge-toolbar" onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
             <div className="edge-toolbar-group">
@@ -346,6 +407,22 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
                 </button>
               ))}
             </div>
+            <div className="edge-toolbar-divider" />
+            <div className="edge-toolbar-group">
+              {ROUTING_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  title={opt.title}
+                  className={`edge-toolbar-btn${(curRouting === opt.value || (opt.value === 'auto' && curRouting !== 'polyline' && curRouting !== 'straight' && curRouting !== 'bezier')) ? ' active' : ''}`}
+                  onClick={() => handleRoutingChange(opt.value)}
+                >{opt.label}</button>
+              ))}
+            </div>
+            <button
+              className="edge-toolbar-delete"
+              title="화살표 삭제"
+              onClick={() => setEdges(eds => eds.filter(e => e.id !== selectedEdge!.id))}
+            >🗑</button>
             <button className="edge-toolbar-close" onClick={() => setEdges(eds => eds.map(e => ({ ...e, selected: false })))}>✕</button>
           </div>
         )

@@ -376,30 +376,33 @@ export function irToFlow(ir: ArchIR, theme: DiagramTheme = 'dark'): { nodes: Nod
     absPos.set(n.id, { x: n.position.x + parentPos.x, y: n.position.y + parentPos.y })
   }
 
-  // 반대 방향 핸들 쌍 (베지어로 자연스럽게)
-  const OPPOSITE: Record<string, string> = { bottom: 'top', top: 'bottom', left: 'right', right: 'left' }
-
+  // 핸들 방향 선택: 출발 방향은 target 쪽을 향하는 면, 도착 방향은 source 쪽을 향하는 면
+  // 수평 편향 (|dx| >= |dy|*0.6): 수평 핸들 → smoothstep이 자연스러운 S자
+  // 수직 편향 (|dy| > |dx|*1.5): 수직 핸들
+  // 대각선 (~45°): 수평 핸들 선호 (아키텍처 다이어그램은 좌→우 흐름이 주)
   function getBestHandles(fromId: string, toId: string) {
     const src = absPos.get(fromId) || { x: 0, y: 0 }
     const tgt = absPos.get(toId) || { x: 0, y: 0 }
     const dx = tgt.x - src.x
     const dy = tgt.y - src.y
-    if (Math.abs(dy) >= Math.abs(dx)) {
+    const absDx = Math.abs(dx)
+    const absDy = Math.abs(dy)
+    // 확실히 수직인 경우에만 top/bottom 사용 (dy가 dx의 1.5배 초과)
+    if (absDy > absDx * 1.5) {
       return dy >= 0
         ? { sourceHandle: 'bottom-s', targetHandle: 'top-t' }
         : { sourceHandle: 'top-s', targetHandle: 'bottom-t' }
-    } else {
-      return dx >= 0
-        ? { sourceHandle: 'right-s', targetHandle: 'left-t' }
-        : { sourceHandle: 'left-s', targetHandle: 'right-t' }
     }
+    // 나머지(수평, 대각선)는 모두 right/left
+    return dx >= 0
+      ? { sourceHandle: 'right-s', targetHandle: 'left-t' }
+      : { sourceHandle: 'left-s', targetHandle: 'right-t' }
   }
 
-  // 핸들 방향이 정반대면 bezier, 아니면 smoothstep(ㄷ자 라운드)
-  function getRouting(sh: string, th: string): 'bezier' | 'smoothstep' {
-    const srcDir = sh.replace(/-[st]$/, '')
-    const tgtDir = th.replace(/-[st]$/, '')
-    return OPPOSITE[srcDir] === tgtDir ? 'bezier' : 'smoothstep'
+  // auto 기본값: 항상 smoothstep (직각 라우팅)
+  // straight/bezier는 AI 또는 사용자가 명시할 때만
+  function getRouting(_sh: string, _th: string): 'smoothstep' {
+    return 'smoothstep'
   }
 
   // ── 8) 반대방향 엣지 쌍 탐지 → 라벨 오프셋 자동 분리 ──
@@ -441,7 +444,14 @@ export function irToFlow(ir: ArchIR, theme: DiagramTheme = 'dark'): { nodes: Nod
     const handles = edge.sourceHandle && edge.targetHandle
       ? { sourceHandle: edge.sourceHandle, targetHandle: edge.targetHandle }
       : getBestHandles(edge.from, edge.to)
-    const routing = getRouting(handles.sourceHandle, handles.targetHandle)
+
+    // routing_mode가 'polyline'이면 그대로, 아니면 자동 결정
+    const autoRouting = getRouting(handles.sourceHandle, handles.targetHandle)
+    const routing = edge.routing_mode === 'polyline' ? 'polyline'
+      : edge.routing_mode === 'straight' ? 'straight'
+      : edge.routing_mode === 'bezier' ? 'bezier'
+      : autoRouting
+
     const autoOff = labelAutoOffset.get(edge.id) || { x: 0, y: 0 }
     edges.push({
       id: edge.id,
@@ -460,6 +470,8 @@ export function irToFlow(ir: ArchIR, theme: DiagramTheme = 'dark'): { nodes: Nod
         line_type: edge.line_type,
         arrow: edge.arrow || 'forward',
         routing,
+        routing_mode: edge.routing_mode ?? 'auto',
+        waypoints: edge.waypoints ?? [],
         labelOffsetX: (edge.label_offset_x ?? 0) + autoOff.x,
         labelOffsetY: (edge.label_offset_y ?? 0) + autoOff.y,
       },
@@ -478,7 +490,15 @@ export function flowToIR(
   const updatedGroups = ir.groups.map(irGroup => {
     const flowNode = flowNodes.find(n => n.id === irGroup.id)
     if (flowNode) {
-      return { ...irGroup, position: flowNode.position }
+      return {
+        ...irGroup,
+        position: flowNode.position,
+        // 리사이즈된 크기도 반영 (style.width/height)
+        size: {
+          width: (flowNode.style?.width as number) ?? irGroup.size?.width,
+          height: (flowNode.style?.height as number) ?? irGroup.size?.height,
+        },
+      }
     }
     return irGroup
   })
@@ -502,10 +522,16 @@ export function flowToIR(
     return irNode
   })
 
-  // 엣지: 재연결로 바뀐 source/target/handle 반영
-  const updatedEdges = ir.edges.map(irEdge => {
-    const fe = flowEdges.find(e => e.id === irEdge.id)
-    if (fe) {
+  // 엣지: flow 상태가 source of truth
+  // - flow에 없으면 삭제된 것 → IR에서도 제거
+  // - flow에 있지만 IR에 없으면 새로 추가된 것 → IR에 추가
+  const flowEdgeIds = new Set(flowEdges.map(e => e.id))
+  const irEdgeIds = new Set(ir.edges.map(e => e.id))
+
+  const updatedEdges = ir.edges
+    .filter(irEdge => flowEdgeIds.has(irEdge.id)) // 삭제된 엣지 제거
+    .map(irEdge => {
+      const fe = flowEdges.find(e => e.id === irEdge.id)!
       return {
         ...irEdge,
         from: fe.source,
@@ -515,12 +541,28 @@ export function flowToIR(
         targetHandle: fe.targetHandle ?? undefined,
         arrow: fe.data?.arrow ?? irEdge.arrow,
         line_type: fe.data?.line_type ?? irEdge.line_type,
+        routing_mode: fe.data?.routing_mode ?? irEdge.routing_mode,
+        waypoints: fe.data?.waypoints ?? irEdge.waypoints,
         label_offset_x: fe.data?.labelOffsetX ?? irEdge.label_offset_x,
         label_offset_y: fe.data?.labelOffsetY ?? irEdge.label_offset_y,
       }
-    }
-    return irEdge
-  })
+    })
 
-  return { ...ir, nodes: updatedNodes, groups: updatedGroups, edges: updatedEdges }
+  // onConnect로 추가된 새 엣지 → IR에 포함
+  const newEdges = flowEdges
+    .filter(fe => !irEdgeIds.has(fe.id))
+    .map(fe => ({
+      id: fe.id,
+      from: fe.source,
+      to: fe.target,
+      label: (fe.label as string) ?? '',
+      arrow: fe.data?.arrow ?? 'forward',
+      line_type: fe.data?.line_type ?? 'general',
+      routing_mode: fe.data?.routing_mode,
+      waypoints: fe.data?.waypoints,
+      label_offset_x: fe.data?.labelOffsetX,
+      label_offset_y: fe.data?.labelOffsetY,
+    }))
+
+  return { ...ir, nodes: updatedNodes, groups: updatedGroups, edges: [...updatedEdges, ...newEdges] }
 }
