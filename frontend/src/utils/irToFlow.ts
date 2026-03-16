@@ -148,21 +148,33 @@ export function irToFlowFlowchart(ir: ArchIR, theme: DiagramTheme = 'dark'): { n
     byDepth.get(d)!.push(n)
   })
 
-  const VERT_SPACING = 140
-  const HORIZ_SPACING = 180
-  const CENTER_X = 400
+  // 뱀 배치: MAX_PER_COL개마다 오른쪽 열로 이동
+  const MAX_PER_COL = 4
+  const COL_W = 220
+  const ROW_H = 140
 
-  const nodes: Node[] = []
-  byDepth.forEach((nodesAtDepth, d) => {
-    const totalW = (nodesAtDepth.length - 1) * HORIZ_SPACING
-    nodesAtDepth.forEach((n, i) => {
-      nodes.push({
-        id: n.id,
-        type: 'flowNode',
-        position: { x: CENTER_X + i * HORIZ_SPACING - totalW / 2, y: d * VERT_SPACING },
-        data: { label: n.label, nodeType: n.type || 'process' },
-      })
-    })
+  // BFS 순서로 노드 정렬
+  const orderedNodes: any[] = []
+  const maxDepth = depth.size > 0 ? Math.max(...Array.from(depth.values())) : 0
+  for (let d = 0; d <= maxDepth; d++) {
+    const atDepth = byDepth.get(d) || []
+    orderedNodes.push(...atDepth)
+  }
+
+  const nodes: Node[] = orderedNodes.map((n, i) => {
+    const col = Math.floor(i / MAX_PER_COL)
+    const row = i % MAX_PER_COL
+    return {
+      id: n.id,
+      type: 'flowNode',
+      position: { x: col * COL_W, y: row * ROW_H },
+      data: {
+        label: n.label,
+        nodeType: n.type || 'process',
+        iconKey: n.icon || null,
+        iconUrl: resolveIconUrl(n.icon, theme),
+      },
+    }
   })
 
   const edges: Edge[] = ir.edges.map(e => {
@@ -172,14 +184,12 @@ export function irToFlowFlowchart(ir: ArchIR, theme: DiagramTheme = 'dark'): { n
       type: 'arrowEdge',
       source: e.from,
       target: e.to,
-      sourceHandle: 'bottom-s',
-      targetHandle: 'top-t',
       label: e.label || '',
       style: ls,
       ...labelStyle,
       labelBgPadding: [4, 8] as [number, number],
       labelBgBorderRadius: 4,
-      data: { arrow: e.arrow || 'forward', routing: 'bezier', line_type: e.line_type || 'general' },
+      data: { arrow: e.arrow || 'forward', routing: 'smoothstep', line_type: e.line_type || 'general' },
     }
   })
 

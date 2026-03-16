@@ -96,6 +96,8 @@ export default function ArrowEdge(props: EdgeProps) {
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null)
   // 웨이포인트 드래그 상태: { wpIdx, wps(미리보기) }
   const [wpDrag, setWpDrag] = useState<{ idx: number; wps: WP[] } | null>(null)
+  // straight/smoothstep 선택 시 가상 꺾임 드래그 상태
+  const [virtualDrag, setVirtualDrag] = useState<{ idx: number; wps: WP[] } | null>(null)
 
   // polyline이면서 저장된 waypoint가 없을 때 → 렌더 시 Z자 계산 (side-effect 없음)
   // 사용자가 드래그하면 그때 storedWaypoints에 저장됨
@@ -108,6 +110,9 @@ export default function ArrowEdge(props: EdgeProps) {
       : [{ x: sourceX, y: (sourceY + targetY) / 2 },
          { x: targetX, y: (sourceY + targetY) / 2 }]
   }
+
+  // straight/smoothstep 선택 시 가상 핸들 위치 (Z자)
+  const virtualWps: WP[] = routing !== 'polyline' ? computeDefaultPolylineWps() : []
 
   // 현재 표시할 waypoints
   const currentWps: WP[] = wpDrag
@@ -123,7 +128,15 @@ export default function ArrowEdge(props: EdgeProps) {
   let endAngle: number
   let startAngle: number
 
-  if (routing === 'polyline') {
+  if (virtualDrag) {
+    // 가상 꺾임 드래그 중: polyline 경로로 미리보기
+    const wps = virtualDrag.wps
+    edgePath = buildPolylinePath(sourceX, sourceY, targetX, targetY, wps)
+    const lc = polylineLabelCenter(sourceX, sourceY, targetX, targetY, wps)
+    labelX = lc.x; labelY = lc.y
+    endAngle   = polylineEndAngle(targetX, targetY, wps)
+    startAngle = polylineStartAngle(sourceX, sourceY, wps)
+  } else if (routing === 'polyline') {
     edgePath = buildPolylinePath(sourceX, sourceY, targetX, targetY, currentWps)
     const lc = polylineLabelCenter(sourceX, sourceY, targetX, targetY, currentWps)
     labelX = lc.x; labelY = lc.y
@@ -211,6 +224,30 @@ export default function ArrowEdge(props: EdgeProps) {
     const baseWps = currentWps
     const newWps = baseWps.filter((_, i) => i !== idx)
     updateEdgeData(id, { waypoints: newWps })
+  }
+
+  // ── 가상 핸들 드래그 (straight/smoothstep → polyline 변환) ──────────────────
+  const onVirtualWpMouseDown = (e: React.MouseEvent, idx: number) => {
+    e.stopPropagation(); e.preventDefault()
+    const startMx = e.clientX, startMy = e.clientY
+    const baseWps = virtualWps
+    const origWp = baseWps[idx]
+    const onMouseMove = (ev: MouseEvent) => {
+      const dx = (ev.clientX - startMx) / zoomRef.current
+      const dy = (ev.clientY - startMy) / zoomRef.current
+      setVirtualDrag({ idx, wps: baseWps.map((wp, i) => i === idx ? { x: origWp.x + dx, y: origWp.y + dy } : wp) })
+    }
+    const onMouseUp = (ev: MouseEvent) => {
+      const dx = (ev.clientX - startMx) / zoomRef.current
+      const dy = (ev.clientY - startMy) / zoomRef.current
+      const finalWps = baseWps.map((wp, i) => i === idx ? { x: origWp.x + dx, y: origWp.y + dy } : wp)
+      setVirtualDrag(null)
+      updateEdgeData(id, { routing: 'polyline', routing_mode: 'polyline', waypoints: finalWps })
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
   }
 
   // ── 세그먼트 중간점 클릭 → 새 웨이포인트 삽입 ──────────────────────────────
@@ -302,6 +339,26 @@ export default function ArrowEdge(props: EdgeProps) {
           >
             {labelText}
           </div>
+        </EdgeLabelRenderer>
+      )}
+
+      {/* straight/smoothstep 선택 시: 가상 꺾임 핸들 표시 */}
+      {selected && routing !== 'polyline' && !virtualDrag && (
+        <EdgeLabelRenderer>
+          {virtualWps.map((wp, i) => (
+            <div
+              key={`vwp-${i}`}
+              className="nodrag nopan waypoint-handle waypoint-handle-virtual"
+              style={{
+                position: 'absolute',
+                transform: `translate(-50%, -50%) translate(${wp.x}px, ${wp.y}px)`,
+                pointerEvents: 'all',
+                borderColor: color,
+              }}
+              onMouseDown={e => onVirtualWpMouseDown(e, i)}
+              title="드래그: 꺾임선으로 변환"
+            />
+          ))}
         </EdgeLabelRenderer>
       )}
 

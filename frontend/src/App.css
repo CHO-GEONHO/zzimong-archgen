@@ -875,6 +875,18 @@ body::before {
   width: 100%;
   height: 100%;
 }
+.flow-node-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.flow-node-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
 .flow-node-label {
   font-size: 12px;
   font-weight: 500;
@@ -1074,6 +1086,9 @@ body::before {
 }
 .waypoint-handle:hover { transform: translate(-50%, -50%) scale(1.4) !important; }
 .waypoint-handle:active { cursor: grabbing; }
+/* 가상 꺾임 핸들: 반투명으로 구분 */
+.waypoint-handle-virtual { opacity: 0.5; border-style: dashed; }
+.waypoint-handle-virtual:hover { opacity: 0.9; transform: translate(-50%, -50%) scale(1.4) !important; }
 
 .waypoint-mid-handle {
   width: 8px; height: 8px; border-radius: 50%;

@@ -60,6 +60,7 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const [iconOnly, setIconOnly] = useState(false)
+  const [showFlowIcons, setShowFlowIcons] = useState(true)
   const { getNodes, getEdges, fitView } = useReactFlow()
   const skipIrToFlowRef = useRef(false)
   // ir을 ref로도 추적 — 콜백 내부에서 클로저 의존성 없이 최신값 접근
@@ -102,8 +103,10 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
     ),
     sequenceActor: SequenceActorNode,
     sequenceMessage: SequenceMessageNode,
-    flowNode: FlowNode,
-  }), [onSearchIcon, iconOnly, handleNodeLabelChange, handleGroupResize])
+    flowNode: (props: any) => (
+      <FlowNode {...props} data={{ ...props.data, showIcon: showFlowIcons }} />
+    ),
+  }), [onSearchIcon, iconOnly, showFlowIcons, handleNodeLabelChange, handleGroupResize])
 
   const edgeTypes = useMemo(() => ({ arrowEdge: ArrowEdge }), [])
 
@@ -129,6 +132,9 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
     setNodes(nds => nds.map(n => {
       if (n.type === 'infraNode') {
         return { ...n, data: { ...n.data, iconUrl: resolveIconUrl(n.data.iconKey, theme), theme } }
+      }
+      if (n.type === 'flowNode') {
+        return { ...n, data: { ...n.data, iconUrl: resolveIconUrl(n.data.iconKey, theme) } }
       }
       if (n.type === 'groupNode') {
         const irGroup = ir.groups.find((g: any) => g.id === n.id)
@@ -431,11 +437,19 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
       <div className="canvas-toolbar">
         <button onClick={handleSave} className="btn-primary">저장</button>
         <button onClick={handleExportPng} className="btn-secondary">PNG</button>
-        <button
-          onClick={() => setIconOnly(v => !v)}
-          className={`btn-secondary${iconOnly ? ' btn-active' : ''}`}
-          title="아이콘 전용 모드"
-        >아이콘</button>
+        {ir?.meta?.diagram_type === 'flowchart' ? (
+          <button
+            onClick={() => setShowFlowIcons(v => !v)}
+            className={`btn-secondary${showFlowIcons ? ' btn-active' : ''}`}
+            title="아이콘 표시/숨김"
+          >아이콘</button>
+        ) : (
+          <button
+            onClick={() => setIconOnly(v => !v)}
+            className={`btn-secondary${iconOnly ? ' btn-active' : ''}`}
+            title="아이콘 전용 모드"
+          >아이콘</button>
+        )}
         <button onClick={onToggleTheme} className="btn-secondary btn-theme">
           {isDark ? 'Light' : 'Dark'}
         </button>

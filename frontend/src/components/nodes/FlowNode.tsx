@@ -3,6 +3,8 @@ import { Handle, Position } from 'reactflow'
 interface FlowNodeData {
   label: string
   nodeType: 'process' | 'decision' | 'terminal' | string
+  iconUrl?: string | null
+  showIcon?: boolean
 }
 
 const SIDES = [
@@ -14,6 +16,8 @@ const SIDES = [
 
 export default function FlowNode({ data }: { data: FlowNodeData }) {
   const type = data.nodeType
+  const showIcon = data.showIcon !== false
+  const hasIcon = showIcon && !!data.iconUrl
 
   return (
     <div className={`flow-node flow-node-${type}`}>
@@ -27,11 +31,15 @@ export default function FlowNode({ data }: { data: FlowNodeData }) {
       {type === 'decision' ? (
         <div className="flow-node-diamond">
           <div className="flow-node-diamond-inner">
+            {hasIcon && <img src={data.iconUrl!} alt="" className="flow-node-icon" />}
             <span className="flow-node-label">{data.label}</span>
           </div>
         </div>
       ) : (
-        <span className="flow-node-label">{data.label}</span>
+        <div className="flow-node-content">
+          {hasIcon && <img src={data.iconUrl!} alt="" className="flow-node-icon" />}
+          <span className="flow-node-label">{data.label}</span>
+        </div>
       )}
     </div>
   )
