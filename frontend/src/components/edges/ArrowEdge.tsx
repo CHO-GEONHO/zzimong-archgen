@@ -175,7 +175,7 @@ export default function ArrowEdge(props: EdgeProps) {
         { id: 'left-t',   x: pos.x,           y: pos.y + h / 2 },
         { id: 'top-t',    x: pos.x + w / 2,   y: pos.y         },
         { id: 'bottom-t', x: pos.x + w / 2,   y: pos.y + h     },
-      ].forEach(h => result.push({ nodeId: node.id, ...h }))
+      ].forEach(({ id: handleId, x, y }) => result.push({ nodeId: node.id, handleId, x, y }))
     })
     return result
   }
@@ -249,13 +249,13 @@ export default function ArrowEdge(props: EdgeProps) {
     const startMx = e.clientX, startMy = e.clientY
     const startOx = storedOffsetX, startOy = storedOffsetY
     const onMouseMove = (ev: MouseEvent) => {
-      const [tx, ty, tz] = transformRef.current
+      const [, , tz] = transformRef.current
       const dx = (ev.clientX - startMx) / tz
       const dy = (ev.clientY - startMy) / tz
       setDragOffset({ x: startOx + dx, y: startOy + dy })
     }
     const onMouseUp = (ev: MouseEvent) => {
-      const [tx, ty, tz] = transformRef.current
+      const [, , tz] = transformRef.current
       const dx = (ev.clientX - startMx) / tz
       const dy = (ev.clientY - startMy) / tz
       setDragOffset(null)
