@@ -69,8 +69,19 @@ function polylineStartAngle(sx: number, sy: number, wps: WP[]): number {
   return Math.atan2(sy - next.y, sx - next.x)
 }
 
-const EP_SNAP_R  = 30  // 엔드포인트 → 노드 핸들 스냅 반경
-const WP_SNAP_R  = 20  // 웨이포인트 → 웨이포인트 스냅 반경
+const EP_SNAP_R   = 30  // 엔드포인트 → 노드 핸들 스냅 반경
+const WP_SNAP_R   = 20  // 웨이포인트 → 웨이포인트 스냅 반경
+const AXIS_SNAP_R = 8   // 수직/수평 축 정렬 스냅 반경
+
+// 인접 점들과 비교해 수직/수평 축에 스냅
+function axisSnap(pos: WP, adjacent: WP[]): WP {
+  let { x, y } = pos
+  for (const a of adjacent) {
+    if (Math.abs(y - a.y) < AXIS_SNAP_R) y = a.y  // 수평 정렬
+    if (Math.abs(x - a.x) < AXIS_SNAP_R) x = a.x  // 수직 정렬
+  }
+  return { x, y }
+}
 
 export default function ArrowEdge(props: EdgeProps) {
   const {
@@ -256,27 +267,31 @@ export default function ArrowEdge(props: EdgeProps) {
     window.addEventListener('mouseup', onMouseUp)
   }
 
-  // ── 웨이포인트 드래그 (꺾임점↔꺾임점 스냅 포함) ──────────────────────────────
+  // ── 웨이포인트 드래그 (축 스냅 + 꺾임점↔꺾임점 스냅) ────────────────────────
   const onWaypointMouseDown = (e: React.MouseEvent, idx: number) => {
     e.stopPropagation(); e.preventDefault()
     const startMx = e.clientX, startMy = e.clientY
     const baseWps = currentWps
     const origWp  = baseWps[idx]
+    // 인접점: 이전(또는 source), 다음(또는 target)
+    const adjPts: WP[] = [
+      idx === 0 ? { x: sourceX, y: sourceY } : baseWps[idx - 1],
+      idx === baseWps.length - 1 ? { x: targetX, y: targetY } : baseWps[idx + 1],
+    ]
+    const snap = (raw: WP): WP => {
+      const axis = axisSnap(raw, adjPts)
+      if (axis.x !== raw.x || axis.y !== raw.y) return axis  // 축 스냅 우선
+      return findWpSnap(raw.x, raw.y) ?? raw
+    }
     const onMouseMove = (ev: MouseEvent) => {
       const [, , tz] = transformRef.current
-      const dx = (ev.clientX - startMx) / tz
-      const dy = (ev.clientY - startMy) / tz
-      const rawPos = { x: origWp.x + dx, y: origWp.y + dy }
-      const snapPos = findWpSnap(rawPos.x, rawPos.y) ?? rawPos
-      setWpDrag({ idx, wps: baseWps.map((wp, i) => i === idx ? snapPos : wp) })
+      const dx = (ev.clientX - startMx) / tz, dy = (ev.clientY - startMy) / tz
+      setWpDrag({ idx, wps: baseWps.map((wp, i) => i === idx ? snap({ x: origWp.x + dx, y: origWp.y + dy }) : wp) })
     }
     const onMouseUp = (ev: MouseEvent) => {
       const [, , tz] = transformRef.current
-      const dx = (ev.clientX - startMx) / tz
-      const dy = (ev.clientY - startMy) / tz
-      const rawPos = { x: origWp.x + dx, y: origWp.y + dy }
-      const snapPos = findWpSnap(rawPos.x, rawPos.y) ?? rawPos
-      const newWps = baseWps.map((wp, i) => i === idx ? snapPos : wp)
+      const dx = (ev.clientX - startMx) / tz, dy = (ev.clientY - startMy) / tz
+      const newWps = baseWps.map((wp, i) => i === idx ? snap({ x: origWp.x + dx, y: origWp.y + dy }) : wp)
       setWpDrag(null)
       updateEdgeData(id, { waypoints: newWps })
       window.removeEventListener('mousemove', onMouseMove)
@@ -291,27 +306,30 @@ export default function ArrowEdge(props: EdgeProps) {
     updateEdgeData(id, { waypoints: currentWps.filter((_, i) => i !== idx) })
   }
 
-  // ── 가상 핸들 드래그 (straight/smoothstep → polyline, 꺾임점 스냅 포함) ───────
+  // ── 가상 핸들 드래그 (straight/smoothstep → polyline, 축 스냅 + 꺾임점 스냅) ──
   const onVirtualWpMouseDown = (e: React.MouseEvent, idx: number) => {
     e.stopPropagation(); e.preventDefault()
     const startMx = e.clientX, startMy = e.clientY
     const baseWps = virtualWps
     const origWp  = baseWps[idx]
+    const adjPts: WP[] = [
+      idx === 0 ? { x: sourceX, y: sourceY } : baseWps[idx - 1],
+      idx === baseWps.length - 1 ? { x: targetX, y: targetY } : baseWps[idx + 1],
+    ]
+    const snap = (raw: WP): WP => {
+      const axis = axisSnap(raw, adjPts)
+      if (axis.x !== raw.x || axis.y !== raw.y) return axis
+      return findWpSnap(raw.x, raw.y) ?? raw
+    }
     const onMouseMove = (ev: MouseEvent) => {
       const [, , tz] = transformRef.current
-      const dx = (ev.clientX - startMx) / tz
-      const dy = (ev.clientY - startMy) / tz
-      const rawPos = { x: origWp.x + dx, y: origWp.y + dy }
-      const snapPos = findWpSnap(rawPos.x, rawPos.y) ?? rawPos
-      setVirtualDrag({ idx, wps: baseWps.map((wp, i) => i === idx ? snapPos : wp) })
+      const dx = (ev.clientX - startMx) / tz, dy = (ev.clientY - startMy) / tz
+      setVirtualDrag({ idx, wps: baseWps.map((wp, i) => i === idx ? snap({ x: origWp.x + dx, y: origWp.y + dy }) : wp) })
     }
     const onMouseUp = (ev: MouseEvent) => {
       const [, , tz] = transformRef.current
-      const dx = (ev.clientX - startMx) / tz
-      const dy = (ev.clientY - startMy) / tz
-      const rawPos = { x: origWp.x + dx, y: origWp.y + dy }
-      const snapPos = findWpSnap(rawPos.x, rawPos.y) ?? rawPos
-      const finalWps = baseWps.map((wp, i) => i === idx ? snapPos : wp)
+      const dx = (ev.clientX - startMx) / tz, dy = (ev.clientY - startMy) / tz
+      const finalWps = baseWps.map((wp, i) => i === idx ? snap({ x: origWp.x + dx, y: origWp.y + dy }) : wp)
       setVirtualDrag(null)
       updateEdgeData(id, { routing: 'polyline', routing_mode: 'polyline', waypoints: finalWps })
       window.removeEventListener('mousemove', onMouseMove)
@@ -362,22 +380,23 @@ export default function ArrowEdge(props: EdgeProps) {
     updateEdgeData(id, { waypoints: newWps })
     const startMx = e.clientX, startMy = e.clientY
     const origWp  = { x: mx, y: my }
+    // 삽입된 점의 인접점: 세그먼트 양 끝
+    const adjPts: WP[] = [allPts[insertIdx], allPts[insertIdx + 1]]
+    const snap = (raw: WP): WP => {
+      const axis = axisSnap(raw, adjPts)
+      if (axis.x !== raw.x || axis.y !== raw.y) return axis
+      return findWpSnap(raw.x, raw.y) ?? raw
+    }
     const onMouseMove = (ev: MouseEvent) => {
       const [, , tz] = transformRef.current
-      const dx = (ev.clientX - startMx) / tz
-      const dy = (ev.clientY - startMy) / tz
-      const rawPos = { x: origWp.x + dx, y: origWp.y + dy }
-      const snapPos = findWpSnap(rawPos.x, rawPos.y) ?? rawPos
-      setWpDrag({ idx: insertIdx, wps: newWps.map((wp, i) => i === insertIdx ? snapPos : wp) })
+      const dx = (ev.clientX - startMx) / tz, dy = (ev.clientY - startMy) / tz
+      setWpDrag({ idx: insertIdx, wps: newWps.map((wp, i) => i === insertIdx ? snap({ x: origWp.x + dx, y: origWp.y + dy }) : wp) })
     }
     const onMouseUp = (ev: MouseEvent) => {
       const [, , tz] = transformRef.current
-      const dx = (ev.clientX - startMx) / tz
-      const dy = (ev.clientY - startMy) / tz
-      const rawPos = { x: origWp.x + dx, y: origWp.y + dy }
-      const snapPos = findWpSnap(rawPos.x, rawPos.y) ?? rawPos
+      const dx = (ev.clientX - startMx) / tz, dy = (ev.clientY - startMy) / tz
       setWpDrag(null)
-      updateEdgeData(id, { waypoints: newWps.map((wp, i) => i === insertIdx ? snapPos : wp) })
+      updateEdgeData(id, { waypoints: newWps.map((wp, i) => i === insertIdx ? snap({ x: origWp.x + dx, y: origWp.y + dy }) : wp) })
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup', onMouseUp)
     }
