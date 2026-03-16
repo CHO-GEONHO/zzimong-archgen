@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from api.database import get_db, Diagram, DiagramVersion, ModifyHistory
+from core.usage_logger import CallTimer, log_response, log_error
 
 router = APIRouter()
 
@@ -175,14 +176,21 @@ async def modify_diagram(request: ModifyRequest, db: AsyncSession = Depends(get_
 
 수정된 전체 JSON IR을 출력하세요:"""
 
-        response = client.chat.completions.create(
-            model="deepseek-chat",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            response_format={"type": "json_object"},
-        )
+        _model = "deepseek-chat"
+        try:
+            with CallTimer(_model) as t:
+                response = client.chat.completions.create(
+                    model=_model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    response_format={"type": "json_object"},
+                )
+            log_response(_model, response, t.elapsed)
+        except Exception:
+            log_error(_model)
+            raise
 
         modified_ir = json.loads(response.choices[0].message.content)
 
@@ -222,14 +230,21 @@ async def query_diagram(request: QueryRequest):
   "answer": "직접 답변 (예: DB가 3개 있습니다)"
 }"""
 
-        response = client.chat.completions.create(
-            model="deepseek-chat",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"IR: {json.dumps(request.ir_json, ensure_ascii=False)}\n\n쿼리: {request.query}"},
-            ],
-            response_format={"type": "json_object"},
-        )
+        _model = "deepseek-chat"
+        try:
+            with CallTimer(_model) as t:
+                response = client.chat.completions.create(
+                    model=_model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": f"IR: {json.dumps(request.ir_json, ensure_ascii=False)}\n\n쿼리: {request.query}"},
+                    ],
+                    response_format={"type": "json_object"},
+                )
+            log_response(_model, response, t.elapsed)
+        except Exception:
+            log_error(_model)
+            raise
 
         result = json.loads(response.choices[0].message.content)
         return result

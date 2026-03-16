@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Optional
 
 from core.llm import get_llm_client, get_fallback_client, get_model_name, get_parse_client, PARSE_MODEL
+from core.usage_logger import CallTimer, log_response, log_error
 
 # 로컬 공식 아이콘 + Iconify CDN 혼합 참조
 # 로컬: "aws-official/ec2.svg" 형식 → /icons/ 경로로 서빙
@@ -449,20 +450,26 @@ class TextParser:
     def _call_llm(self, client, model: str, text: str, system_prompt: str = None) -> Optional[dict]:
         """LLM 호출 → IR dict 반환. 실패 시 None"""
         prompt = system_prompt or SYSTEM_PROMPT
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": (
-                    f"다음 인프라 설명을 분석하여 JSON IR로 변환하세요.\n"
-                    f"모든 노드에 icon 필드를 채우고, data_flow를 상세히 작성하세요.\n\n"
-                    f"---\n{text}\n---"
-                )},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.1,
-            max_tokens=16000,  # Gemini 2.5 Pro는 thinking 토큰 포함 (최대 ~4000 thinking + ~4000 JSON)
-        )
+        try:
+            with CallTimer(model) as t:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": prompt},
+                        {"role": "user", "content": (
+                            f"다음 인프라 설명을 분석하여 JSON IR로 변환하세요.\n"
+                            f"모든 노드에 icon 필드를 채우고, data_flow를 상세히 작성하세요.\n\n"
+                            f"---\n{text}\n---"
+                        )},
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.1,
+                    max_tokens=16000,
+                )
+            log_response(model, response, t.elapsed)
+        except Exception:
+            log_error(model)
+            raise
         raw = response.choices[0].message.content
         if raw is None:
             return None
