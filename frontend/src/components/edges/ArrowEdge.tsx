@@ -351,7 +351,9 @@ export default function ArrowEdge(props: EdgeProps) {
               className="nodrag nopan waypoint-handle waypoint-handle-virtual"
               style={{
                 position: 'absolute',
-                transform: `translate(-50%, -50%) translate(${wp.x}px, ${wp.y}px)`,
+                left: wp.x,
+                top: wp.y,
+                transform: 'translate(-50%, -50%)',
                 pointerEvents: 'all',
                 borderColor: color,
               }}
@@ -362,17 +364,19 @@ export default function ArrowEdge(props: EdgeProps) {
         </EdgeLabelRenderer>
       )}
 
-      {/* Polyline: 웨이포인트 핸들 + 세그먼트 중간점 핸들 */}
-      {routing === 'polyline' && (
+      {/* Polyline: 웨이포인트 핸들 + 세그먼트 중간점 핸들 (선택 시만) */}
+      {routing === 'polyline' && selected && (
         <EdgeLabelRenderer>
-          {/* 세그먼트 중간점 핸들 (선택됐을 때만 표시) */}
-          {selected && segmentMidpoints.map((seg, i) => (
+          {/* 세그먼트 중간점 핸들 */}
+          {segmentMidpoints.map((seg, i) => (
             <div
               key={`seg-mid-${i}`}
               className="nodrag nopan waypoint-mid-handle"
               style={{
                 position: 'absolute',
-                transform: `translate(-50%, -50%) translate(${seg.x}px, ${seg.y}px)`,
+                left: seg.x,
+                top: seg.y,
+                transform: 'translate(-50%, -50%)',
                 pointerEvents: 'all',
               }}
               onMouseDown={e => onSegmentMidMouseDown(e, seg.insertIdx, seg.x, seg.y)}
@@ -386,7 +390,9 @@ export default function ArrowEdge(props: EdgeProps) {
               className="nodrag nopan waypoint-handle"
               style={{
                 position: 'absolute',
-                transform: `translate(-50%, -50%) translate(${wp.x}px, ${wp.y}px)`,
+                left: wp.x,
+                top: wp.y,
+                transform: 'translate(-50%, -50%)',
                 pointerEvents: 'all',
                 borderColor: color,
               }}
