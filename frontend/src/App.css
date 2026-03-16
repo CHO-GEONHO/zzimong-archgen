@@ -629,7 +629,7 @@ body::before {
 .node-badges { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 3px; }
 
 /* ── MOBILE LAYOUT ── */
-@media (max-width: 767px) {
+@media (max-width: 520px) {
   .main-layout {
     display: block; position: relative; flex: 1; overflow: hidden;
   }

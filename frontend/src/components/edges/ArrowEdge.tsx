@@ -87,6 +87,11 @@ export default function ArrowEdge(props: EdgeProps) {
   const transformRef = useRef(transform)
   transformRef.current = transform
 
+  // ReactFlow 컨테이너 DOM 노드 (좌표 변환용)
+  const domNode = useStore(s => s.domNode)
+  const domNodeRef = useRef(domNode)
+  domNodeRef.current = domNode
+
   // 스냅용: 모든 노드 internals (절대 좌표 포함)
   const nodeInternals = useStore(s => s.nodeInternals)
   const nodeInternalsRef = useRef(nodeInternals)
@@ -133,9 +138,11 @@ export default function ArrowEdge(props: EdgeProps) {
       : routing === 'polyline' ? computeDefaultPolylineWps() : []
 
   // ── 스크린 → 캔버스 좌표 변환 ─────────────────────────────────────────────────
+  // clientX/Y는 뷰포트 기준, ReactFlow transform은 컨테이너 기준이므로 컨테이너 offset 빼야 함
   function toCanvas(cx: number, cy: number): WP {
     const [tx, ty, tz] = transformRef.current
-    return { x: (cx - tx) / tz, y: (cy - ty) / tz }
+    const rect = domNodeRef.current?.getBoundingClientRect() ?? { left: 0, top: 0 }
+    return { x: (cx - rect.left - tx) / tz, y: (cy - rect.top - ty) / tz }
   }
 
   // ── 노드 핸들 위치 목록 (드래그 시작 시점에 캡처) ─────────────────────────────
