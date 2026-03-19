@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Handle, Position } from 'reactflow'
+import { Handle, Position, NodeResizer } from 'reactflow'
 
 interface InfraNodeData {
   label: string
@@ -13,8 +13,12 @@ interface InfraNodeData {
   nodeId?: string
   theme?: string
   iconOnly?: boolean
+  width?: number
+  height?: number
   onSearchIcon?: (nodeId: string, nodeType: string, label: string) => void
   onLabelChange?: (id: string, patch: { label?: string; sublabel?: string }) => void
+  onNodeResize?: (id: string, w: number, h: number) => void
+  onNodeResizeEnd?: () => void
 }
 
 const SIDES = [
@@ -59,7 +63,7 @@ function InlineInput({
   )
 }
 
-export default function InfraNode({ id, data }: { id: string; data: InfraNodeData }) {
+export default function InfraNode({ id, data, selected }: { id: string; data: InfraNodeData; selected?: boolean }) {
   const [editingField, setEditingField] = useState<'label' | 'sublabel' | null>(null)
   const hasIcon = !!data.iconUrl
 
@@ -71,8 +75,20 @@ export default function InfraNode({ id, data }: { id: string; data: InfraNodeDat
   }
 
   if (data.iconOnly) {
+    // 아이콘온리 모드: 리사이즈 가능 정사각형 카드
+    const nodeSize = Math.min(data.width ?? 80, data.height ?? 80)
+    const iconSize = Math.round(Math.min(Math.max(nodeSize * 0.55, 24), 72))
     return (
-      <div className="infra-node infra-node-icon-only">
+      <div className="infra-node infra-node-icon-only" style={{ width: data.width ?? 80, height: data.height ?? 80 }}>
+        <NodeResizer
+          isVisible={selected}
+          minWidth={60}
+          minHeight={60}
+          lineStyle={{ borderColor: '#6366f1', borderWidth: 1.5 }}
+          handleStyle={{ width: 8, height: 8, borderRadius: 2, background: '#6366f1' }}
+          onResize={(_, params) => data.onNodeResize?.(id, params.width, params.height)}
+          onResizeEnd={() => data.onNodeResizeEnd?.()}
+        />
         {SIDES.map(({ pos, id: sid }) => (
           <React.Fragment key={sid}>
             <Handle type="target" position={pos} id={`${sid}-t`} className="node-handle" />
@@ -81,16 +97,16 @@ export default function InfraNode({ id, data }: { id: string; data: InfraNodeDat
         ))}
         <div
           className="node-icon-wrap node-icon-clickable"
-          style={{ width: 48, height: 48 }}
+          style={{ width: iconSize, height: iconSize }}
           title="클릭하여 아이콘 변경"
           onClick={e => { e.stopPropagation(); data.onSearchIcon?.(data.nodeId || '', data.nodeType || '', data.label) }}
         >
           {hasIcon ? (
-            <img src={data.iconUrl!} className="node-icon-large" width={48} height={48}
+            <img src={data.iconUrl!} className="node-icon-large" width={iconSize} height={iconSize}
               onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
             />
           ) : (
-            <div className="node-icon-placeholder" style={{ width: 48, height: 48, fontSize: 20 }}>
+            <div className="node-icon-placeholder" style={{ width: iconSize, height: iconSize, fontSize: Math.round(iconSize * 0.42) }}>
               {data.nodeType?.[0]?.toUpperCase() || '?'}
             </div>
           )}
@@ -102,14 +118,27 @@ export default function InfraNode({ id, data }: { id: string; data: InfraNodeDat
           <span
             className="icon-only-label"
             onDoubleClick={e => { e.stopPropagation(); setEditingField('label') }}
-          >{truncate(data.label, 14)}</span>
+          >{truncate(data.label, Math.max(8, Math.floor((data.width ?? 80) / 6)))}</span>
         )}
       </div>
     )
   }
 
+  // 일반 모드: 리사이즈 가능 카드
+  const nodeW = data.width ?? 160
+  const iconSize = Math.round(Math.min(Math.max(nodeW * 0.22, 24), 56))
+
   return (
-    <div className="infra-node">
+    <div className="infra-node" style={{ width: data.width, minWidth: data.width ? undefined : undefined }}>
+      <NodeResizer
+        isVisible={selected}
+        minWidth={100}
+        minHeight={60}
+        lineStyle={{ borderColor: '#6366f1', borderWidth: 1.5 }}
+        handleStyle={{ width: 8, height: 8, borderRadius: 2, background: '#6366f1' }}
+        onResize={(_, params) => data.onNodeResize?.(id, params.width, params.height)}
+        onResizeEnd={() => data.onNodeResizeEnd?.()}
+      />
       {SIDES.map(({ pos, id: sid }) => (
         <React.Fragment key={sid}>
           <Handle type="target" position={pos} id={`${sid}-t`} className="node-handle" />
@@ -128,8 +157,8 @@ export default function InfraNode({ id, data }: { id: string; data: InfraNodeDat
             <img
               src={data.iconUrl!}
               className="node-icon"
-              width={36}
-              height={36}
+              width={iconSize}
+              height={iconSize}
               onError={e => {
                 const el = e.target as HTMLImageElement
                 el.style.display = 'none'

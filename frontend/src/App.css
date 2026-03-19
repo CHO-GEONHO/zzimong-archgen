@@ -350,7 +350,7 @@ body::before {
 .infra-node {
   background: rgba(255,255,255,0.05); backdrop-filter: blur(12px);
   border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
-  padding: 10px 14px; min-width: 130px; max-width: 200px;
+  padding: 10px 14px; min-width: 100px;
   position: relative; cursor: grab; transition: all 0.2s;
   box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
@@ -744,8 +744,6 @@ body::before {
 
 /* ── 아이콘 전용 모드 ── */
 .infra-node-icon-only {
-  width: 80px !important;
-  height: 80px !important;
   display: flex;
   flex-direction: column;
   align-items: center;
