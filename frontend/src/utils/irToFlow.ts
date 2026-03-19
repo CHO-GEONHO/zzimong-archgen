@@ -513,7 +513,7 @@ export function flowToIR(
     return irGroup
   })
 
-  // 노드: React Flow 상대좌표 → IR 절대좌표로 역변환
+  // 노드: React Flow 상대좌표 → IR 절대좌표로 역변환 + 리사이즈 크기 저장
   const updatedNodes = ir.nodes.map(irNode => {
     const flowNode = flowNodes.find(n => n.id === irNode.id)
     if (flowNode) {
@@ -527,7 +527,11 @@ export function flowToIR(
           }
         }
       }
-      return { ...irNode, position: pos }
+      const patch: Record<string, unknown> = { position: pos }
+      // 사용자가 수동으로 리사이즈한 경우 크기 저장
+      if (flowNode.data?.width) patch.width = flowNode.data.width
+      if (flowNode.data?.height) patch.height = flowNode.data.height
+      return { ...irNode, ...patch }
     }
     return irNode
   })
