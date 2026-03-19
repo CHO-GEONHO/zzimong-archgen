@@ -372,6 +372,9 @@ export function irToFlow(ir: ArchIR, theme: DiagramTheme = 'dark'): { nodes: Nod
         nodeType: node.type,
         nodeId: node.id,
         theme,
+        // 사용자가 수동으로 리사이즈한 크기가 저장된 경우 복원
+        ...(node.width  ? { width:  node.width  } : {}),
+        ...(node.height ? { height: node.height } : {}),
       },
     })
   }
