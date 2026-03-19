@@ -95,9 +95,23 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
     ))
   }, [setNodes])
 
+  // InfraNode 리사이즈: data.width/height 업데이트 → 아이콘 동적 스케일 반영
+  const handleNodeResize = useCallback((nodeId: string, w: number, h: number) => {
+    setNodes(nds => nds.map(n =>
+      n.id === nodeId ? { ...n, data: { ...n.data, width: w, height: h } } : n
+    ))
+  }, [setNodes])
+
+  // InfraNode 리사이즈 완료 시 IR 동기화
+  const handleNodeResizeEnd = useCallback(() => {
+    if (!irRef.current) return
+    skipIrToFlowRef.current = true
+    onIrChange(flowToIR(irRef.current, getNodes(), getEdges()))
+  }, [onIrChange, getNodes, getEdges])
+
   const nodeTypes = useMemo(() => ({
     infraNode: (props: any) => (
-      <InfraNode {...props} data={{ ...props.data, onSearchIcon, iconOnly, onLabelChange: handleNodeLabelChange }} />
+      <InfraNode {...props} data={{ ...props.data, onSearchIcon, iconOnly, onLabelChange: handleNodeLabelChange, onNodeResize: handleNodeResize, onNodeResizeEnd: handleNodeResizeEnd }} />
     ),
     groupNode: (props: any) => (
       <GroupNode {...props} data={{ ...props.data, onLabelChange: handleNodeLabelChange, onGroupResize: handleGroupResize, onResizeEnd: handleGroupResizeEnd }} />
@@ -107,7 +121,7 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
     flowNode: (props: any) => (
       <FlowNode {...props} data={{ ...props.data, showIcon: showFlowIcons }} />
     ),
-  }), [onSearchIcon, iconOnly, showFlowIcons, handleNodeLabelChange, handleGroupResize])
+  }), [onSearchIcon, iconOnly, showFlowIcons, handleNodeLabelChange, handleGroupResize, handleNodeResize, handleNodeResizeEnd])
 
   const edgeTypes = useMemo(() => ({ arrowEdge: ArrowEdge }), [])
 
