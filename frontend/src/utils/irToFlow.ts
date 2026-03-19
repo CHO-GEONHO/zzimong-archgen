@@ -581,5 +581,20 @@ export function flowToIR(
       label_offset_y: fe.data?.labelOffsetY,
     }))
 
-  return { ...ir, nodes: updatedNodes, groups: updatedGroups, edges: [...updatedEdges, ...newEdges] }
+  // 사용자가 캔버스에서 직접 추가한 새 노드 → IR에 포함
+  const irNodeIds = new Set(ir.nodes.map(n => n.id))
+  const newIrNodes = flowNodes
+    .filter(fn => fn.type === 'infraNode' && !irNodeIds.has(fn.id))
+    .map(fn => ({
+      id: fn.id,
+      label: fn.data?.label ?? '노드',
+      sublabel: fn.data?.sublabel ?? '',
+      type: fn.data?.nodeType ?? 'custom',
+      icon: fn.data?.iconKey ?? null,
+      position: fn.position,
+      ...(fn.data?.width  ? { width:  fn.data.width  } : {}),
+      ...(fn.data?.height ? { height: fn.data.height } : {}),
+    }))
+
+  return { ...ir, nodes: [...updatedNodes, ...newIrNodes], groups: updatedGroups, edges: [...updatedEdges, ...newEdges] }
 }
