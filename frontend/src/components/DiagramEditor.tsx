@@ -10,6 +10,7 @@ import ReactFlow, {
   addEdge,
   updateEdge,
   ConnectionMode,
+  ConnectionLineType,
 } from 'reactflow'
 import toast from 'react-hot-toast'
 import type { ArchIR } from '../App'
@@ -384,6 +385,7 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
         edgeTypes={edgeTypes}
         fitView
         fitViewOptions={{ padding: 0.15 }}
+        connectionLineType={ConnectionLineType.Straight}
         connectionMode={ConnectionMode.Loose}
         deleteKeyCode={['Delete', 'Backspace']}
         minZoom={0.2}
