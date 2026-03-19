@@ -62,7 +62,7 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const [iconOnly, setIconOnly] = useState(false)
   const [showFlowIcons, setShowFlowIcons] = useState(true)
-  const { getNodes, getEdges, fitView } = useReactFlow()
+  const { getNodes, getEdges, fitView, addNodes, getViewport } = useReactFlow()
   const skipIrToFlowRef = useRef(false)
   // ir을 ref로도 추적 — 콜백 내부에서 클로저 의존성 없이 최신값 접근
   const irRef = useRef(ir)
@@ -291,6 +291,32 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
     onIrChange(flowToIR(irRef.current, getNodes(), getEdges()))
   }, [onIrChange, getNodes, getEdges])
 
+  // 빈 노드 추가: 현재 뷰포트 중앙에 배치
+  const handleAddNode = useCallback(() => {
+    const { x: vx, y: vy, zoom } = getViewport()
+    // 뷰포트 중앙 좌표 (canvas 좌표계)
+    const centerX = (-vx + window.innerWidth * 0.5) / zoom
+    const centerY = (-vy + window.innerHeight * 0.5) / zoom
+    const offset = getNodes().length * 20
+    const newId = `custom-${Date.now()}`
+    addNodes({
+      id: newId,
+      type: 'infraNode',
+      position: { x: centerX - 80 + offset, y: centerY - 40 + offset },
+      data: {
+        label: '새 노드',
+        sublabel: '',
+        iconUrl: null,
+        iconKey: null,
+        tags: [],
+        nodeType: 'custom',
+        nodeId: newId,
+        theme,
+      },
+      selected: true,
+    })
+  }, [addNodes, getViewport, getNodes, theme])
+
   const handleSave = async () => {
     if (!ir) return
     const updatedIr = flowToIR(ir, nodes, edges)
@@ -475,6 +501,9 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
       <div className="canvas-toolbar">
         <button onClick={handleSave} className="btn-primary">저장</button>
         <button onClick={handleExportPng} className="btn-secondary">PNG</button>
+        {(!ir?.meta?.diagram_type || ir.meta.diagram_type === 'architecture') && (
+          <button onClick={handleAddNode} className="btn-secondary" title="빈 노드 추가">+ 노드</button>
+        )}
         {ir?.meta?.diagram_type === 'flowchart' ? (
           <button
             onClick={() => setShowFlowIcons(v => !v)}
