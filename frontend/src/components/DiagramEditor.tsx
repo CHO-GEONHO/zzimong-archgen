@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Connection, Edge } from 'reactflow'
+import type { Connection, Edge, Node } from 'reactflow'
 import ReactFlow, {
   Background,
   Controls,
@@ -86,6 +86,34 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
     }
   }, [onIrChange, setNodes])
 
+  // 자식 InfraNode가 부모 GroupNode 헤더/경계를 벗어나지 않도록 위치 보정
+  // - y >= HEADER_H + 8 (헤더 아래)
+  // - x/y + nodeW/H <= groupW/H - EDGE_PAD (오른쪽/아래 경계 이내)
+  const clampChildNodes = useCallback((allNodes: Node[]): Node[] => {
+    const GROUP_HEADER = 50  // 헤더 높이(40) + 여유(10)
+    const EDGE_PAD = 8
+    const groupDims = new Map<string, { w: number; h: number }>()
+    for (const n of allNodes) {
+      if (n.type === 'groupNode') {
+        groupDims.set(n.id, {
+          w: (n.style?.width as number) ?? n.width ?? 800,
+          h: (n.style?.height as number) ?? n.height ?? 600,
+        })
+      }
+    }
+    return allNodes.map(n => {
+      if (n.type !== 'infraNode' || !n.parentNode) return n
+      const dim = groupDims.get(n.parentNode)
+      if (!dim) return n
+      const nW = n.width ?? 160
+      const nH = n.height ?? 80
+      const x = Math.min(Math.max(n.position.x, EDGE_PAD), dim.w - nW - EDGE_PAD)
+      const y = Math.min(Math.max(n.position.y, GROUP_HEADER), dim.h - nH - EDGE_PAD)
+      if (x === n.position.x && y === n.position.y) return n
+      return { ...n, position: { x, y } }
+    })
+  }, [])
+
   // 그룹 리사이즈 시 자식 노드 위치 역방향 보정 (부모 position 변화 상쇄)
   const handleGroupResize = useCallback((groupId: string, dx: number, dy: number) => {
     setNodes(nds => nds.map(n =>
@@ -102,12 +130,14 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
     ))
   }, [setNodes])
 
-  // InfraNode 리사이즈 완료 시 IR 동기화
+  // InfraNode 리사이즈 완료 시 클램프 + IR 동기화
   const handleNodeResizeEnd = useCallback(() => {
     if (!irRef.current) return
     skipIrToFlowRef.current = true
-    onIrChange(flowToIR(irRef.current, getNodes(), getEdges()))
-  }, [onIrChange, getNodes, getEdges])
+    const clamped = clampChildNodes(getNodes())
+    setNodes(clamped)
+    onIrChange(flowToIR(irRef.current, clamped, getEdges()))
+  }, [clampChildNodes, getNodes, getEdges, setNodes, onIrChange])
 
   const nodeTypes = useMemo(() => ({
     infraNode: (props: any) => (
@@ -278,18 +308,22 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
   )
 
   const onNodeDragStop = useCallback(() => {
-    if (!ir) return
+    if (!irRef.current) return
     skipIrToFlowRef.current = true
-    const updatedIr = flowToIR(ir, nodes, edges)
-    onIrChange(updatedIr)
-  }, [ir, nodes, edges, onIrChange])
+    // 드래그 후 자식 노드가 그룹 헤더/경계와 겹치지 않도록 보정
+    const clamped = clampChildNodes(getNodes())
+    setNodes(clamped)
+    onIrChange(flowToIR(irRef.current, clamped, getEdges()))
+  }, [clampChildNodes, getNodes, getEdges, setNodes, onIrChange])
 
-  // 그룹 리사이즈 완료 시 IR 동기화
+  // 그룹 리사이즈 완료 시 자식 노드 클램프 + IR 동기화
   const handleGroupResizeEnd = useCallback(() => {
     if (!irRef.current) return
     skipIrToFlowRef.current = true
-    onIrChange(flowToIR(irRef.current, getNodes(), getEdges()))
-  }, [onIrChange, getNodes, getEdges])
+    const clamped = clampChildNodes(getNodes())
+    setNodes(clamped)
+    onIrChange(flowToIR(irRef.current, clamped, getEdges()))
+  }, [clampChildNodes, getNodes, getEdges, setNodes, onIrChange])
 
   // 빈 노드 추가: 현재 뷰포트 중앙에 배치
   const handleAddNode = useCallback(() => {
