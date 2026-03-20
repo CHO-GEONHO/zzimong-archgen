@@ -63,7 +63,9 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
   const [iconOnly, setIconOnly] = useState(false)
   const [showFlowIcons, setShowFlowIcons] = useState(true)
   const { getNodes, getEdges, fitView, addNodes, getViewport } = useReactFlow()
-  const skipIrToFlowRef = useRef(false)
+  // flow→IR 동기화 후 useEffect가 다시 irToFlow를 호출하지 않도록 참조 비교
+  // (boolean 플래그와 달리 StrictMode에서 effect가 2번 실행되어도 안전)
+  const lastSyncedIrRef = useRef<ArchIR | null>(null)
   // ir을 ref로도 추적 — 콜백 내부에서 클로저 의존성 없이 최신값 접근
   const irRef = useRef(ir)
   irRef.current = ir
@@ -76,13 +78,14 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
   const handleNodeLabelChange = useCallback((id: string, patch: { label?: string; sublabel?: string }) => {
     setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, ...patch } } : n))
     if (irRef.current) {
-      skipIrToFlowRef.current = true
       const cur = irRef.current
-      onIrChange({
+      const newIr = {
         ...cur,
         nodes:  cur.nodes.map(n  => n.id  === id ? { ...n,  ...patch } : n),
         groups: cur.groups.map(g => g.id  === id ? { ...g,  label: patch.label ?? g.label } : g),
-      })
+      }
+      lastSyncedIrRef.current = newIr
+      onIrChange(newIr)
     }
   }, [onIrChange, setNodes])
 
@@ -133,10 +136,11 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
   // InfraNode 리사이즈 완료 시 클램프 + IR 동기화
   const handleNodeResizeEnd = useCallback(() => {
     if (!irRef.current) return
-    skipIrToFlowRef.current = true
     const clamped = clampChildNodes(getNodes())
     setNodes(clamped)
-    onIrChange(flowToIR(irRef.current, clamped, getEdges()))
+    const newIr = flowToIR(irRef.current, clamped, getEdges())
+    lastSyncedIrRef.current = newIr
+    onIrChange(newIr)
   }, [clampChildNodes, getNodes, getEdges, setNodes, onIrChange])
 
   const nodeTypes = useMemo(() => ({
@@ -158,8 +162,7 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
   // IR 변경 시 전체 재생성 (theme 제외 — 수동 엣지 보존 위해)
   useEffect(() => {
     if (!ir) return
-    if (skipIrToFlowRef.current) {
-      skipIrToFlowRef.current = false
+    if (lastSyncedIrRef.current === ir) {
       return
     }
     const { nodes: newNodes, edges: newEdges } = irToFlow(ir, theme)
@@ -247,9 +250,12 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
       // 경로가 바뀌므로 waypoints 초기화, smoothstep으로 리셋
       return { ...e, ...patch, data: { ...e.data, waypoints: [], routing_mode: 'auto', routing: 'smoothstep' } }
     })
-    skipIrToFlowRef.current = true
     setEdges(newEdges)
-    if (irRef.current) onIrChange(flowToIR(irRef.current, getNodes(), newEdges))
+    if (irRef.current) {
+      const newIr = flowToIR(irRef.current, getNodes(), newEdges)
+      lastSyncedIrRef.current = newIr
+      onIrChange(newIr)
+    }
   }, [getEdges, getNodes, setEdges, onIrChange])
 
   // 툴바 라벨 입력
@@ -301,7 +307,6 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
 
   const onEdgeUpdate = useCallback(
     (oldEdge: Edge, newConnection: Connection) => {
-      skipIrToFlowRef.current = true
       setEdges(eds => updateEdge(oldEdge, newConnection, eds))
     },
     [setEdges],
@@ -309,20 +314,22 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
 
   const onNodeDragStop = useCallback(() => {
     if (!irRef.current) return
-    skipIrToFlowRef.current = true
     // 드래그 후 자식 노드가 그룹 헤더/경계와 겹치지 않도록 보정
     const clamped = clampChildNodes(getNodes())
     setNodes(clamped)
-    onIrChange(flowToIR(irRef.current, clamped, getEdges()))
+    const newIr = flowToIR(irRef.current, clamped, getEdges())
+    lastSyncedIrRef.current = newIr
+    onIrChange(newIr)
   }, [clampChildNodes, getNodes, getEdges, setNodes, onIrChange])
 
   // 그룹 리사이즈 완료 시 자식 노드 클램프 + IR 동기화
   const handleGroupResizeEnd = useCallback(() => {
     if (!irRef.current) return
-    skipIrToFlowRef.current = true
     const clamped = clampChildNodes(getNodes())
     setNodes(clamped)
-    onIrChange(flowToIR(irRef.current, clamped, getEdges()))
+    const newIr = flowToIR(irRef.current, clamped, getEdges())
+    lastSyncedIrRef.current = newIr
+    onIrChange(newIr)
   }, [clampChildNodes, getNodes, getEdges, setNodes, onIrChange])
 
   // 빈 노드 추가: 현재 뷰포트 중앙에 배치
