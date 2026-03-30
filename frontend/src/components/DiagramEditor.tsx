@@ -143,6 +143,32 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
     onIrChange(newIr)
   }, [clampChildNodes, getNodes, getEdges, setNodes, onIrChange])
 
+  // 그룹 삭제 (GroupNode 헤더 ✕ 버튼)
+  const handleDeleteGroup = useCallback((groupId: string) => {
+    const allNodes = getNodes()
+    const group = allNodes.find(n => n.id === groupId)
+    const parentPos = group?.position ?? { x: 0, y: 0 }
+    const updated = allNodes
+      .filter(n => n.id !== groupId)
+      .map(n => {
+        if (n.parentNode === groupId) {
+          return {
+            ...n,
+            position: { x: n.position.x + parentPos.x, y: n.position.y + parentPos.y },
+            parentNode: undefined,
+            extent: undefined,
+          }
+        }
+        return n
+      })
+    setNodes(updated)
+    if (irRef.current) {
+      const newIr = flowToIR(irRef.current, updated, getEdges())
+      lastSyncedIrRef.current = newIr
+      onIrChange(newIr)
+    }
+  }, [getNodes, getEdges, setNodes, onIrChange])
+
   const nodeTypes = useMemo(() => ({
     infraNode: (props: any) => (
       <InfraNode {...props} data={{ ...props.data, onSearchIcon, iconOnly, onLabelChange: handleNodeLabelChange, onNodeResize: handleNodeResize, onNodeResizeEnd: handleNodeResizeEnd }} />
@@ -358,32 +384,6 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
     const newIr = flowToIR(irRef.current, currentNodes, getEdges())
     lastSyncedIrRef.current = newIr
     onIrChange(newIr)
-  }, [getNodes, getEdges, setNodes, onIrChange])
-
-  // 그룹 삭제 (GroupNode 헤더 ✕ 버튼)
-  const handleDeleteGroup = useCallback((groupId: string) => {
-    const allNodes = getNodes()
-    const group = allNodes.find(n => n.id === groupId)
-    const parentPos = group?.position ?? { x: 0, y: 0 }
-    const updated = allNodes
-      .filter(n => n.id !== groupId)
-      .map(n => {
-        if (n.parentNode === groupId) {
-          return {
-            ...n,
-            position: { x: n.position.x + parentPos.x, y: n.position.y + parentPos.y },
-            parentNode: undefined,
-            extent: undefined,
-          }
-        }
-        return n
-      })
-    setNodes(updated)
-    if (irRef.current) {
-      const newIr = flowToIR(irRef.current, updated, getEdges())
-      lastSyncedIrRef.current = newIr
-      onIrChange(newIr)
-    }
   }, [getNodes, getEdges, setNodes, onIrChange])
 
   // 빈 노드 추가: 현재 뷰포트 중앙에 배치
