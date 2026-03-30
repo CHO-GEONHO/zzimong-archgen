@@ -169,9 +169,22 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
     }
   }, [getNodes, getEdges, setNodes, onIrChange])
 
+  // 노드 삭제 (InfraNode ✕ 버튼)
+  const handleDeleteNode = useCallback((nodeId: string) => {
+    const updated = getNodes().filter(n => n.id !== nodeId)
+    const updatedEdges = getEdges().filter(e => e.source !== nodeId && e.target !== nodeId)
+    setNodes(updated)
+    setEdges(updatedEdges)
+    if (irRef.current) {
+      const newIr = flowToIR(irRef.current, updated, updatedEdges)
+      lastSyncedIrRef.current = newIr
+      onIrChange(newIr)
+    }
+  }, [getNodes, getEdges, setNodes, setEdges, onIrChange])
+
   const nodeTypes = useMemo(() => ({
     infraNode: (props: any) => (
-      <InfraNode {...props} data={{ ...props.data, onSearchIcon, iconOnly, onLabelChange: handleNodeLabelChange, onNodeResize: handleNodeResize, onNodeResizeEnd: handleNodeResizeEnd }} />
+      <InfraNode {...props} data={{ ...props.data, onSearchIcon, iconOnly, onLabelChange: handleNodeLabelChange, onNodeResize: handleNodeResize, onNodeResizeEnd: handleNodeResizeEnd, onDelete: handleDeleteNode }} />
     ),
     groupNode: (props: any) => (
       <GroupNode {...props} data={{ ...props.data, onLabelChange: handleNodeLabelChange, onGroupResize: handleGroupResize, onResizeEnd: handleGroupResizeEnd, onDelete: handleDeleteGroup }} />
@@ -181,7 +194,7 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
     flowNode: (props: any) => (
       <FlowNode {...props} data={{ ...props.data, showIcon: showFlowIcons }} />
     ),
-  }), [onSearchIcon, iconOnly, showFlowIcons, handleNodeLabelChange, handleGroupResize, handleNodeResize, handleNodeResizeEnd, handleDeleteGroup])
+  }), [onSearchIcon, iconOnly, showFlowIcons, handleNodeLabelChange, handleGroupResize, handleNodeResize, handleNodeResizeEnd, handleDeleteGroup, handleDeleteNode])
 
   const edgeTypes = useMemo(() => ({ arrowEdge: ArrowEdge }), [])
 
@@ -412,14 +425,13 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
     })
   }, [addNodes, getViewport, getNodes, theme])
 
-  // 빈 영역(Zone) 추가: 5가지 프리셋 색상 순환
+  // 빈 영역(Zone) 추가: 색상 선택 후 생성
   const GROUP_COLORS = useMemo(() => ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'], [])
-  const groupColorIdxRef = useRef(0)
-  const handleAddGroup = useCallback(() => {
+  const [showGroupColors, setShowGroupColors] = useState(false)
+  const handleAddGroup = useCallback((color: string) => {
     const { x: vx, y: vy, zoom } = getViewport()
     const cx = (-vx + window.innerWidth / 2) / zoom
     const cy = (-vy + window.innerHeight / 2) / zoom
-    const color = GROUP_COLORS[groupColorIdxRef.current++ % GROUP_COLORS.length]
     addNodes({
       id: `zone-${Date.now()}`,
       type: 'groupNode',
@@ -434,7 +446,8 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
       data: { label: '새 영역', color },
       selected: true,
     })
-  }, [addNodes, getViewport, theme, GROUP_COLORS])
+    setShowGroupColors(false)
+  }, [addNodes, getViewport, theme])
 
   const handleSave = async () => {
     if (!ir) return
@@ -624,7 +637,16 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
         {(!ir?.meta?.diagram_type || ir.meta.diagram_type === 'architecture') && (
           <>
             <button onClick={handleAddNode} className="btn-secondary" title="빈 노드 추가">+ 노드</button>
-            <button onClick={handleAddGroup} className="btn-secondary" title="빈 영역 추가">+ 영역</button>
+            <div className="zone-btn-wrap">
+              <button onClick={() => setShowGroupColors(v => !v)} className="btn-secondary" title="빈 영역 추가">+ 영역</button>
+              {showGroupColors && (
+                <div className="zone-color-picker">
+                  {GROUP_COLORS.map(c => (
+                    <button key={c} className="zone-color-dot" style={{ background: c }} onClick={() => handleAddGroup(c)} title={c} />
+                  ))}
+                </div>
+              )}
+            </div>
           </>
         )}
         {ir?.meta?.diagram_type === 'flowchart' ? (

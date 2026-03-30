@@ -19,6 +19,7 @@ interface InfraNodeData {
   onLabelChange?: (id: string, patch: { label?: string; sublabel?: string }) => void
   onNodeResize?: (id: string, w: number, h: number) => void
   onNodeResizeEnd?: () => void
+  onDelete?: (id: string) => void
 }
 
 const SIDES = [
@@ -80,6 +81,9 @@ export default function InfraNode({ id, data, selected }: { id: string; data: In
     const iconSize = Math.round(Math.min(Math.max(nodeSize * 0.55, 24), 72))
     return (
       <div className="infra-node infra-node-icon-only" style={{ width: data.width ?? 80, height: data.height ?? 80 }}>
+        {selected && data.onDelete && (
+          <button className="node-delete-btn" title="노드 삭제" onClick={e => { e.stopPropagation(); data.onDelete!(id) }}>✕</button>
+        )}
         <NodeResizer
           isVisible={selected}
           minWidth={60}
@@ -130,6 +134,9 @@ export default function InfraNode({ id, data, selected }: { id: string; data: In
 
   return (
     <div className="infra-node" style={{ width: data.width, minWidth: data.width ? undefined : undefined }}>
+      {selected && data.onDelete && (
+        <button className="node-delete-btn" title="노드 삭제" onClick={e => { e.stopPropagation(); data.onDelete!(id) }}>✕</button>
+      )}
       <NodeResizer
         isVisible={selected}
         minWidth={100}

@@ -427,6 +427,37 @@ body::before {
 .canvas-light .group-delete-btn { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.25); color: #dc2626; }
 .canvas-light .group-delete-btn:hover { background: rgba(239,68,68,0.25); }
 
+/* 노드 삭제 버튼 */
+.node-delete-btn {
+  position: absolute; top: -10px; right: -10px; z-index: 10;
+  background: rgba(239,68,68,0.85); color: #fff;
+  border: none; border-radius: 50%;
+  width: 20px; height: 20px;
+  font-size: 11px; line-height: 1;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: auto;
+}
+.node-delete-btn:hover { background: #ef4444; }
+
+/* Zone 색상 선택 팝업 */
+.zone-btn-wrap { position: relative; }
+.zone-color-picker {
+  position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 6px; padding: 6px 10px;
+  background: rgba(20,20,30,0.92); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px; margin-bottom: 6px;
+}
+.zone-color-dot {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.2);
+  cursor: pointer; transition: transform 0.1s;
+}
+.zone-color-dot:hover { transform: scale(1.25); border-color: rgba(255,255,255,0.6); }
+.canvas-light .zone-color-picker { background: rgba(255,255,255,0.95); border-color: rgba(0,0,0,0.1); }
+.canvas-light .zone-color-dot { border-color: rgba(0,0,0,0.15); }
+.canvas-light .zone-color-dot:hover { border-color: rgba(0,0,0,0.4); }
+
 /* ── NodeResizer 스타일 ── */
 .react-flow__resize-control.line {
   border-color: rgba(167,139,250,0.5) !important;
