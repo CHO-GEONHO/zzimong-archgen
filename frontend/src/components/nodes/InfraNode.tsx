@@ -133,7 +133,7 @@ export default function InfraNode({ id, data, selected }: { id: string; data: In
   const iconSize = Math.round(Math.min(Math.max(nodeW * 0.22, 24), 56))
 
   return (
-    <div className="infra-node" style={{ width: data.width, minWidth: data.width ? undefined : undefined }}>
+    <div className="infra-node" style={{ width: data.width, height: data.height }}>
       {selected && data.onDelete && (
         <button className="node-delete-btn" title="노드 삭제" onClick={e => { e.stopPropagation(); data.onDelete!(id) }}>✕</button>
       )}
