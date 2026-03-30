@@ -499,29 +499,34 @@ export function flowToIR(
   flowNodes: Node[],
   flowEdges: Edge[],
 ): ArchIR {
-  // 그룹 먼저 (노드의 절대좌표 복원에 필요)
-  const updatedGroups = ir.groups.map(irGroup => {
-    const flowNode = flowNodes.find(n => n.id === irGroup.id)
-    if (flowNode) {
+  // 삭제된 그룹/노드 감지용 ID 세트
+  const flowGroupIds = new Set(flowNodes.filter(n => n.type === 'groupNode').map(n => n.id))
+  const flowNodeIds = new Set(flowNodes.filter(n => n.type === 'infraNode').map(n => n.id))
+
+  // 그룹 먼저 (노드의 절대좌표 복원에 필요) — 삭제된 그룹 필터링
+  const updatedGroups = ir.groups
+    .filter(irGroup => flowGroupIds.has(irGroup.id))
+    .map(irGroup => {
+      const flowNode = flowNodes.find(n => n.id === irGroup.id)!
       return {
         ...irGroup,
         position: flowNode.position,
-        // 리사이즈된 크기도 반영 (style.width/height)
         size: {
           width: (flowNode.style?.width as number) ?? irGroup.size?.width,
           height: (flowNode.style?.height as number) ?? irGroup.size?.height,
         },
       }
-    }
-    return irGroup
-  })
+    })
 
-  // 노드: React Flow 상대좌표 → IR 절대좌표로 역변환 + 리사이즈 크기 저장
-  const updatedNodes = ir.nodes.map(irNode => {
-    const flowNode = flowNodes.find(n => n.id === irNode.id)
-    if (flowNode) {
+  // 노드: 삭제된 노드 필터링 + 상대좌표→절대좌표 역변환 + 리사이즈 크기 저장
+  const updatedNodes = ir.nodes
+    .filter(irNode => flowNodeIds.has(irNode.id))
+    .map(irNode => {
+      const flowNode = flowNodes.find(n => n.id === irNode.id)!
       let pos = { ...flowNode.position }
-      if (irNode.parent) {
+      // 고아 parent 정리 (삭제된 그룹의 자식)
+      const parentAlive = irNode.parent && flowGroupIds.has(irNode.parent)
+      if (parentAlive) {
         const parentGroup = updatedGroups.find(g => g.id === irNode.parent)
         if (parentGroup?.position) {
           pos = {
@@ -531,13 +536,11 @@ export function flowToIR(
         }
       }
       const patch: Record<string, unknown> = { position: pos }
-      // 사용자가 수동으로 리사이즈한 경우 크기 저장
+      if (!parentAlive && irNode.parent) patch.parent = undefined
       if (flowNode.data?.width) patch.width = flowNode.data.width
       if (flowNode.data?.height) patch.height = flowNode.data.height
       return { ...irNode, ...patch }
-    }
-    return irNode
-  })
+    })
 
   // 엣지: flow 상태가 source of truth
   // - flow에 없으면 삭제된 것 → IR에서도 제거
@@ -596,5 +599,21 @@ export function flowToIR(
       ...(fn.data?.height ? { height: fn.data.height } : {}),
     }))
 
-  return { ...ir, nodes: [...updatedNodes, ...newIrNodes], groups: updatedGroups, edges: [...updatedEdges, ...newEdges] }
+  // 사용자가 캔버스에서 직접 추가한 새 그룹 → IR에 포함
+  const irGroupIds = new Set(ir.groups.map(g => g.id))
+  const newIrGroups = flowNodes
+    .filter(fn => fn.type === 'groupNode' && !irGroupIds.has(fn.id))
+    .map(fn => ({
+      id: fn.id,
+      label: fn.data?.label ?? '영역',
+      color: fn.data?.color ?? '#888888',
+      bg_opacity: 0.06,
+      position: fn.position,
+      size: {
+        width: (fn.style?.width as number) ?? 400,
+        height: (fn.style?.height as number) ?? 300,
+      },
+    }))
+
+  return { ...ir, nodes: [...updatedNodes, ...newIrNodes], groups: [...updatedGroups, ...newIrGroups], edges: [...updatedEdges, ...newEdges] }
 }

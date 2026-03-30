@@ -9,6 +9,7 @@ interface GroupNodeData {
   onLabelChange?: (id: string, patch: { label?: string }) => void
   onGroupResize?: (groupId: string, dx: number, dy: number) => void
   onResizeEnd?: () => void
+  onDelete?: (id: string) => void
 }
 
 function InlineInput({ value, onCommit }: { value: string; onCommit: (v: string) => void }) {
@@ -79,6 +80,13 @@ export default function GroupNode({ id, data, selected }: { id: string; data: Gr
           >{data.label}</span>
         )}
         {data.region && <span className="group-region">{data.region}</span>}
+        {selected && data.onDelete && (
+          <button
+            className="group-delete-btn"
+            title="영역 삭제"
+            onClick={(e) => { e.stopPropagation(); data.onDelete!(id) }}
+          >✕</button>
+        )}
       </div>
     </>
   )

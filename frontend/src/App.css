@@ -411,6 +411,21 @@ body::before {
 .group-label { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.7); }
 .group-region { font-size: 10px; color: rgba(255,255,255,0.35); margin-left: 4px; }
 .group-label-input { width: 90px; }
+.group-delete-btn {
+  margin-left: auto;
+  background: rgba(239,68,68,0.15);
+  color: #f87171;
+  border: 1px solid rgba(239,68,68,0.3);
+  border-radius: 4px;
+  width: 22px; height: 22px;
+  font-size: 12px; line-height: 1;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: auto;
+}
+.group-delete-btn:hover { background: rgba(239,68,68,0.35); }
+.canvas-light .group-delete-btn { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.25); color: #dc2626; }
+.canvas-light .group-delete-btn:hover { background: rgba(239,68,68,0.25); }
 
 /* ── NodeResizer 스타일 ── */
 .react-flow__resize-control.line {

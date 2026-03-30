@@ -148,14 +148,14 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
       <InfraNode {...props} data={{ ...props.data, onSearchIcon, iconOnly, onLabelChange: handleNodeLabelChange, onNodeResize: handleNodeResize, onNodeResizeEnd: handleNodeResizeEnd }} />
     ),
     groupNode: (props: any) => (
-      <GroupNode {...props} data={{ ...props.data, onLabelChange: handleNodeLabelChange, onGroupResize: handleGroupResize, onResizeEnd: handleGroupResizeEnd }} />
+      <GroupNode {...props} data={{ ...props.data, onLabelChange: handleNodeLabelChange, onGroupResize: handleGroupResize, onResizeEnd: handleGroupResizeEnd, onDelete: handleDeleteGroup }} />
     ),
     sequenceActor: SequenceActorNode,
     sequenceMessage: SequenceMessageNode,
     flowNode: (props: any) => (
       <FlowNode {...props} data={{ ...props.data, showIcon: showFlowIcons }} />
     ),
-  }), [onSearchIcon, iconOnly, showFlowIcons, handleNodeLabelChange, handleGroupResize, handleNodeResize, handleNodeResizeEnd])
+  }), [onSearchIcon, iconOnly, showFlowIcons, handleNodeLabelChange, handleGroupResize, handleNodeResize, handleNodeResizeEnd, handleDeleteGroup])
 
   const edgeTypes = useMemo(() => ({ arrowEdge: ArrowEdge }), [])
 
@@ -332,6 +332,60 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
     onIrChange(newIr)
   }, [clampChildNodes, getNodes, getEdges, setNodes, onIrChange])
 
+  // 노드/그룹 삭제 시 IR 동기화 + 그룹 삭제 시 자식 노드 승격
+  const onNodesDelete = useCallback((deletedNodes: Node[]) => {
+    if (!irRef.current) return
+    const deletedGroupIds = new Set(deletedNodes.filter(n => n.type === 'groupNode').map(n => n.id))
+
+    let currentNodes = getNodes()
+    if (deletedGroupIds.size > 0) {
+      // 삭제된 그룹의 자식 노드: parent 해제 + 상대→절대 좌표 변환
+      currentNodes = currentNodes.map(n => {
+        if (n.parentNode && deletedGroupIds.has(n.parentNode)) {
+          const parent = deletedNodes.find(dn => dn.id === n.parentNode)
+          return {
+            ...n,
+            position: { x: n.position.x + (parent?.position.x ?? 0), y: n.position.y + (parent?.position.y ?? 0) },
+            parentNode: undefined,
+            extent: undefined,
+          }
+        }
+        return n
+      })
+      setNodes(currentNodes)
+    }
+
+    const newIr = flowToIR(irRef.current, currentNodes, getEdges())
+    lastSyncedIrRef.current = newIr
+    onIrChange(newIr)
+  }, [getNodes, getEdges, setNodes, onIrChange])
+
+  // 그룹 삭제 (GroupNode 헤더 ✕ 버튼)
+  const handleDeleteGroup = useCallback((groupId: string) => {
+    const allNodes = getNodes()
+    const group = allNodes.find(n => n.id === groupId)
+    const parentPos = group?.position ?? { x: 0, y: 0 }
+    const updated = allNodes
+      .filter(n => n.id !== groupId)
+      .map(n => {
+        if (n.parentNode === groupId) {
+          return {
+            ...n,
+            position: { x: n.position.x + parentPos.x, y: n.position.y + parentPos.y },
+            parentNode: undefined,
+            extent: undefined,
+          }
+        }
+        return n
+      })
+    setNodes(updated)
+    if (irRef.current) {
+      const newIr = flowToIR(irRef.current, updated, getEdges())
+      lastSyncedIrRef.current = newIr
+      onIrChange(newIr)
+    }
+  }, [getNodes, getEdges, setNodes, onIrChange])
+
   // 빈 노드 추가: 현재 뷰포트 중앙에 배치
   const handleAddNode = useCallback(() => {
     const { x: vx, y: vy, zoom } = getViewport()
@@ -357,6 +411,30 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
       selected: true,
     })
   }, [addNodes, getViewport, getNodes, theme])
+
+  // 빈 영역(Zone) 추가: 5가지 프리셋 색상 순환
+  const GROUP_COLORS = useMemo(() => ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'], [])
+  const groupColorIdxRef = useRef(0)
+  const handleAddGroup = useCallback(() => {
+    const { x: vx, y: vy, zoom } = getViewport()
+    const cx = (-vx + window.innerWidth / 2) / zoom
+    const cy = (-vy + window.innerHeight / 2) / zoom
+    const color = GROUP_COLORS[groupColorIdxRef.current++ % GROUP_COLORS.length]
+    addNodes({
+      id: `zone-${Date.now()}`,
+      type: 'groupNode',
+      position: { x: cx - 200, y: cy - 150 },
+      style: {
+        width: 400,
+        height: 300,
+        background: `${color}${theme === 'light' ? '16' : '0f'}`,
+        border: `2px solid ${color}${theme === 'light' ? 'bb' : '66'}`,
+        borderRadius: 16,
+      },
+      data: { label: '새 영역', color },
+      selected: true,
+    })
+  }, [addNodes, getViewport, theme, GROUP_COLORS])
 
   const handleSave = async () => {
     if (!ir) return
@@ -461,6 +539,7 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onEdgeUpdate={onEdgeUpdate}
+        onNodesDelete={onNodesDelete}
         onNodeDragStop={onNodeDragStop}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
@@ -543,7 +622,10 @@ export default function DiagramEditor({ ir, onIrChange, diagramId, onSearchIcon,
         <button onClick={handleSave} className="btn-primary">저장</button>
         <button onClick={handleExportPng} className="btn-secondary">PNG</button>
         {(!ir?.meta?.diagram_type || ir.meta.diagram_type === 'architecture') && (
-          <button onClick={handleAddNode} className="btn-secondary" title="빈 노드 추가">+ 노드</button>
+          <>
+            <button onClick={handleAddNode} className="btn-secondary" title="빈 노드 추가">+ 노드</button>
+            <button onClick={handleAddGroup} className="btn-secondary" title="빈 영역 추가">+ 영역</button>
+          </>
         )}
         {ir?.meta?.diagram_type === 'flowchart' ? (
           <button
